@@ -105,6 +105,19 @@ void update(__attribute__((unused)) float delta_time)
 	/* TODO: Add game logic updates here */
 }
 
+static void draw_background_image(SDL_Renderer *renderer)
+{
+	SDL_Texture *image = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_ABGR8888,
+			SDL_TEXTUREACCESS_STATIC, background_image.width, background_image.height);
+	if (!image) {
+		fprintf(stderr, "Could not create texture for background image\n");
+		exit(1);
+	}
+	SDL_UpdateTexture(image, NULL, background_image.data, 4 * background_image.width);
+	SDL_RenderCopy(renderer, image, NULL, NULL);
+	SDL_DestroyTexture(image);
+}
+
 /* Render graphics to the screen */
 void render(GameState *game)
 {
@@ -113,6 +126,7 @@ void render(GameState *game)
 	SDL_RenderClear(game->renderer);
 
 	/* TODO: Draw your game objects here (e.g., SDL_RenderCopy, SDL_RenderFillRect) */
+	draw_background_image(game->renderer);
 
 	/* Present the back buffer to the screen */
 	SDL_RenderPresent(game->renderer);
