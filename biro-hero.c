@@ -1,6 +1,9 @@
 #include <SDL.h>
 #include <stdbool.h>
 #include <stdio.h>
+#include <stdlib.h>
+#include <dirent.h>
+#include <limits.h>
 
 #include "png_utils.h"
 
@@ -18,6 +21,11 @@ struct game_state {
 	SDL_Renderer *renderer;
 	bool is_running;
 	int mode;
+	int current_level;
+	float camera_x;
+	float camera_vx;
+	float camera_min_x;
+	float camera_max_x;
 } game = { 0 };
 
 struct image {
@@ -31,8 +39,28 @@ struct image {
 	SDL_Surface *surface;
 };
 
+#define MAX_GAME_OBJS 1000
+
+static struct game_object {
+	float x, y;
+	struct image image;
+} go[MAX_GAME_OBJS];
+
+static struct game_object *player = &go[0];
+
+#define MAX_LEVELS 3
+#define MAX_SCREENS_PER_LEVEL 10
+
+struct level {
+	int level_number;
+	int nscreens;
+	struct image terrain[MAX_SCREENS_PER_LEVEL];
+	struct image collision_mask[MAX_SCREENS_PER_LEVEL];
+} level[MAX_LEVELS] = { 0 };
+
 struct image background_image = { "images/notebook-image.png", NULL, 0, 0, 0, 0, NULL, NULL };
 struct image title_screen_image = { "images/biro-hero-title-screen.png", NULL, 0, 0, 0, 0, NULL, NULL };
+// struct image title_screen_image = { "images/level1/level-a1-bg.png", NULL, 0, 0, 0, 0, NULL, NULL };
 
 static int load_png_image(SDL_Renderer *renderer, struct image *i, int image_mode)
 {
@@ -56,6 +84,7 @@ static int load_png_image(SDL_Renderer *renderer, struct image *i, int image_mod
 			fprintf(stderr, "Could not create texture for %s\n", i->filename);
 			exit(1);
 		}
+		SDL_UpdateTexture(i->texture, NULL, i->data, 4 * i->width);
 	}
 	if (i->mode & IMAGE_MODE_SURFACE) {
 		/* TODO: surface stuff */
@@ -80,6 +109,53 @@ static int read_png_files(SDL_Renderer *renderer)
 
 	x += load_png_image(renderer, &background_image, IMAGE_MODE_TEXTURE);
 	x += load_png_image(renderer, &title_screen_image, IMAGE_MODE_TEXTURE);
+	return x;
+}
+
+static int read_levels(SDL_Renderer *renderer)
+{
+	struct dirent **namelist;
+	char path[PATH_MAX];
+
+	int rc = scandir("images/level1", &namelist, NULL, alphasort);
+	if (rc < 0) {
+		fprintf(stderr, "Failed to scan directory images/level1\n");
+		exit(1);
+	}
+	int x = 0;
+	int n = 0;
+	for (int i = 0; i < rc; i++) {
+		if (strcmp(namelist[i]->d_name, ".") == 0 ||
+			strcmp(namelist[i]->d_name, "..") == 0)
+			continue;
+		fprintf(stderr, "Reading level background image %s\n", namelist[i]->d_name);
+		snprintf(path, sizeof(path), "%s/%s", "images/level1", namelist[i]->d_name);
+		free(namelist[i]);
+		level[0].terrain[n].filename = strdup(path);
+		level[0].terrain[n].data = NULL;
+		level[0].terrain[n].width = 0;
+		level[0].terrain[n].height = 0;
+		level[0].terrain[n].alpha = 0;
+		level[0].terrain[n].mode = 0;
+		level[0].terrain[n].texture = NULL;
+		level[0].terrain[n].surface = NULL;
+		x += load_png_image(renderer, &level[0].terrain[n], IMAGE_MODE_TEXTURE);
+		printf("x = %d\n", x);
+		printf("level[0].terrain[%d].filename = %s\n", n, level[0].terrain[n].filename);
+		printf("level[0].terrain[%d].data = %p\n", n, level[0].terrain[n].data);
+		printf("level[0].terrain[%d].width = %d\n", n, level[0].terrain[n].width);
+		printf("level[0].terrain[%d].height = %d\n", n, level[0].terrain[n].height);
+		printf("level[0].terrain[%d].alpha = %d\n", n, level[0].terrain[n].alpha);
+		printf("level[0].terrain[%d].mode = %d\n", n, level[0].terrain[n].mode);
+		printf("level[0].terrain[%d].texture = %p\n", n, (void *) level[0].terrain[n].texture);
+		printf("level[0].terrain[%d].surface = %p\n", n, (void *) level[0].terrain[n].surface);
+		SDL_SetTextureBlendMode(level[0].terrain[n].texture, SDL_BLENDMODE_BLEND);
+		n++;
+		level[0].nscreens = n;
+	}
+	game.camera_min_x = 512.0f;
+	game.camera_max_x = 1024.0f * level[0].nscreens - 512.0f;
+	free(namelist);
 	return x;
 }
 
@@ -118,6 +194,7 @@ bool init_game(struct game_state *game)
 	}
 
 	game->is_running = true;
+	game->camera_x = 1024.0 / 2.0;
 	return true;
 }
 
@@ -172,11 +249,67 @@ static void draw_background_image(SDL_Renderer *renderer)
 		break;
 	}
 	if (i->mode & IMAGE_MODE_TEXTURE) {
-		SDL_UpdateTexture(i->texture, NULL, i->data, 4 * i->width);
 		SDL_RenderCopy(renderer, i->texture, NULL, NULL);
 	} else {
 		fprintf(stderr, "draw_background_image(): non-mapped texture: %s.\n", i->filename);
 		exit(1);
+	}
+}
+
+static void draw_level(SDL_Renderer *renderer)
+{
+	if (game.mode != GAME_MODE_PLAY)
+		return;
+	int use_2nd_image = 0;
+	int img1, img2;
+	int width, height;
+
+	SDL_GetWindowSize(game.window, &width, &height);
+
+	/* figure out which images we need to draw */
+	img1 = (int) (game.camera_x - 512.0f) / 1024.0f;
+	float src1_startx = game.camera_x - (img1 * 1024.0f) - 512.0f;
+	float src1_stopx = 1024.0;
+	float src2_startx;
+	float src2_stopx;
+
+	float dest1_startx;
+	float dest1_width;
+	float dest2_startx;
+	float dest2_width;
+
+	dest1_startx = 100;
+	dest1_width = ((1024.0f - src1_startx) / 1024.0) * 824.0f;
+	dest2_startx = dest1_width + dest1_startx;
+	dest2_width = ((1024.0f - dest2_startx) / 1024.0) * 824.0f;
+	dest2_width = 824.0f - dest1_width;
+
+	// fprintf(stderr, "ax1 = %f, ax2 = %f\n", src1_startx, src1_stopx);
+
+	img2 = img1 + 1;
+	if (img2 >= level[game.current_level].nscreens)
+		use_2nd_image = 1;
+	else
+		use_2nd_image = 1;
+	src2_startx = 0.0;
+	src2_stopx = 1024.0 * ((824.0f - dest1_width) / 824.0f);
+	// fprintf(stderr, "bx1 = %f, bx2 = %f\n", src2_startx, src2_stopx);
+
+	float xscale = (float) width / 1024.0;
+	float yscale = (float) height / 768.0;
+
+	SDL_Rect srcrect = { src1_startx, 0, src1_stopx - src1_startx, 768 };
+	SDL_Rect destrect = { xscale * dest1_startx, yscale * 100,
+				xscale * dest1_width, yscale * 568 };
+	SDL_SetTextureBlendMode(level[0].terrain[img1].texture, SDL_BLENDMODE_MOD);
+	SDL_RenderCopy(renderer, level[0].terrain[img1].texture, &srcrect, &destrect);
+
+	if (use_2nd_image) {
+		SDL_Rect srcrect = { src2_startx, 0, src2_stopx - src2_startx, 768 };
+		SDL_Rect destrect = { xscale * dest2_startx, yscale * 100,
+					xscale * dest2_width, yscale * 568 };
+		SDL_SetTextureBlendMode(level[0].terrain[img2].texture, SDL_BLENDMODE_MOD);
+		SDL_RenderCopy(renderer, level[0].terrain[img2].texture, &srcrect, &destrect);
 	}
 }
 
@@ -189,6 +322,7 @@ void render(struct game_state *game)
 
 	/* TODO: Draw your game objects here (e.g., SDL_RenderCopy, SDL_RenderFillRect) */
 	draw_background_image(game->renderer);
+	draw_level(game->renderer);
 
 	/* Present the back buffer to the screen */
 	SDL_RenderPresent(game->renderer);
@@ -216,9 +350,12 @@ int main(__attribute__((unused)) int argc, __attribute__((unused)) char *argv[])
 
 	if (read_png_files(game.renderer))
 		exit(1);
+	if (read_levels(game.renderer))
+		exit(1);
 
 	Uint32 last_frame_time = SDL_GetTicks();
 
+	game.camera_vx = 1.5;
 	while (game.is_running) {
 		/* Calculate delta time */
 		Uint32 current_time = SDL_GetTicks();
@@ -234,6 +371,15 @@ int main(__attribute__((unused)) int argc, __attribute__((unused)) char *argv[])
 			SDL_Delay(time_to_wait);
 		}
 
+		game.camera_x += game.camera_vx;
+		if (game.camera_x >= game.camera_max_x) {
+			game.camera_vx = -1.5f;
+			game.camera_x = game.camera_max_x;
+		}
+		if (game.camera_x <= game.camera_min_x) {
+			game.camera_vx = 1.5f;
+			game.camera_x = game.camera_min_x;
+		}
 		last_frame_time = current_time;
 	}
 
