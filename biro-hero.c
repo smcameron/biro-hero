@@ -24,15 +24,22 @@ struct image {
 	char *filename;
 	char *data;
 	int width, height, alpha;
+	int mode;
+#define IMAGE_MODE_TEXTURE 1
+#define IMAGE_MODE_SURFACE 2
+	SDL_Texture *texture;
+	SDL_Surface *surface;
 };
 
-struct image background_image = { "images/notebook-image.png", NULL, 0, 0, 0 };
-struct image title_screen_image = { "images/biro-hero-title-screen.png", NULL, 0, 0, 0 };
+struct image background_image = { "images/notebook-image.png", NULL, 0, 0, 0, 0, NULL, NULL };
+struct image title_screen_image = { "images/biro-hero-title-screen.png", NULL, 0, 0, 0, 0, NULL, NULL };
 
-static int load_png_image(struct image *i)
+static int load_png_image(SDL_Renderer *renderer, struct image *i, int image_mode)
 {
 	char whynot[1000];
 
+	i->surface = NULL;
+	i->texture = NULL;
 	i->data = png_utils_read_png_image(i->filename,
 			0, 0, 0, &i->width, &i->height,
 			&i->alpha, whynot, sizeof(whynot));
@@ -41,15 +48,38 @@ static int load_png_image(struct image *i)
 			i->filename, whynot);
 		return -1;
 	}
+	i->mode = image_mode;
+	if (i->mode & IMAGE_MODE_TEXTURE) {
+		i->texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_ABGR8888,
+			SDL_TEXTUREACCESS_STATIC, i->width, i->height);
+		if (!i->texture) {
+			fprintf(stderr, "Could not create texture for %s\n", i->filename);
+			exit(1);
+		}
+	}
+	if (i->mode & IMAGE_MODE_SURFACE) {
+		/* TODO: surface stuff */
+	}
 	return 0;
 }
 
-static int read_png_files(void)
+static void image_cleanup(struct image *i)
+{
+	if (i->texture) {
+		SDL_DestroyTexture(i->texture);
+		i->texture = NULL;
+	}
+	if (i->surface) {
+		/* TODO: surface stuff */
+	}
+}
+
+static int read_png_files(SDL_Renderer *renderer)
 {
 	int x = 0;
 
-	x += load_png_image(&background_image);
-	x += load_png_image(&title_screen_image);
+	x += load_png_image(renderer, &background_image, IMAGE_MODE_TEXTURE);
+	x += load_png_image(renderer, &title_screen_image, IMAGE_MODE_TEXTURE);
 	return x;
 }
 
@@ -129,7 +159,6 @@ void update(__attribute__((unused)) float delta_time)
 static void draw_background_image(SDL_Renderer *renderer)
 {
 	struct image *i;
-	SDL_Texture *bg;
 
 	i = &background_image;
 	switch (game.mode) {
@@ -142,15 +171,13 @@ static void draw_background_image(SDL_Renderer *renderer)
 		i = &background_image;
 		break;
 	}
-	bg = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_ABGR8888,
-		SDL_TEXTUREACCESS_STATIC, i->width, i->height);
-	if (!bg) {
-		fprintf(stderr, "Could not create texture for %s\n", i->filename);
+	if (i->mode & IMAGE_MODE_TEXTURE) {
+		SDL_UpdateTexture(i->texture, NULL, i->data, 4 * i->width);
+		SDL_RenderCopy(renderer, i->texture, NULL, NULL);
+	} else {
+		fprintf(stderr, "draw_background_image(): non-mapped texture: %s.\n", i->filename);
 		exit(1);
 	}
-	SDL_UpdateTexture(bg, NULL, i->data, 4 * i->width);
-	SDL_RenderCopy(renderer, bg, NULL, NULL);
-	SDL_DestroyTexture(bg);
 }
 
 /* Render graphics to the screen */
@@ -170,6 +197,8 @@ void render(struct game_state *game)
 /* Free resources and shut down SDL */
 void cleanup(struct game_state *game)
 {
+	image_cleanup(&background_image);
+	image_cleanup(&title_screen_image);
 	if (game->renderer) {
 		SDL_DestroyRenderer(game->renderer);
 	}
@@ -181,12 +210,12 @@ void cleanup(struct game_state *game)
 
 int main(__attribute__((unused)) int argc, __attribute__((unused)) char *argv[])
 {
-	if (read_png_files())
-		exit(1);
-
 	if (!init_game(&game)) {
 		return 1;
 	}
+
+	if (read_png_files(game.renderer))
+		exit(1);
 
 	Uint32 last_frame_time = SDL_GetTicks();
 
