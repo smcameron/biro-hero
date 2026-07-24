@@ -2,19 +2,44 @@
 #include <stdbool.h>
 #include <stdio.h>
 
+#include "png_utils.h"
+
 #define WINDOW_WIDTH 800
 #define WINDOW_HEIGHT 600
 #define TARGET_FPS 60
 #define FRAME_TARGET_TIME (1000 / TARGET_FPS)
 
-// Game state struct to hold core systems
+/* Game state struct to hold core systems */
 typedef struct {
 	SDL_Window *window;
 	SDL_Renderer *renderer;
 	bool is_running;
 } GameState;
 
-// Initialize SDL, window, and renderer
+struct image {
+	char *filename;
+	char *data;
+	int width, height, alpha;
+};
+
+struct image background_image = { "images/notebook-image.png", NULL, 0, 0, 0 };
+
+static int read_png_files(void)
+{
+	char whynot[1000];
+	
+	background_image.data = png_utils_read_png_image(background_image.filename,
+			0, 0, 0, &background_image.width, &background_image.height,
+			&background_image.alpha, whynot, sizeof(whynot));
+	if (!background_image.data) {
+		fprintf(stderr, "Failed to load %s: %s\n",
+			background_image.filename, whynot);
+		return -1;
+	}
+	return 0;
+}
+
+/* Initialize SDL, window, and renderer */
 bool init_game(GameState *game)
 {
 	if (SDL_Init(SDL_INIT_VIDEO) != 0) {
@@ -54,7 +79,7 @@ bool init_game(GameState *game)
 	return true;
 }
 
-// Handle input events (keyboard, mouse, window close)
+/* Handle input events (keyboard, mouse, window close) */
 void process_input(GameState *game)
 {
 	SDL_Event event;
@@ -74,26 +99,26 @@ void process_input(GameState *game)
 	}
 }
 
-// Update game logic (positions, physics, AI) based on delta time
+/* Update game logic (positions, physics, AI) based on delta time */
 void update(__attribute__((unused)) float delta_time)
 {
-	// TODO: Add game logic updates here
+	/* TODO: Add game logic updates here */
 }
 
-// Render graphics to the screen
+/* Render graphics to the screen */
 void render(GameState *game)
 {
-	// Set draw color to dark gray / black background and clear screen
+	/* Set draw color to dark gray / black background and clear screen */
 	SDL_SetRenderDrawColor(game->renderer, 30, 30, 30, 255);
 	SDL_RenderClear(game->renderer);
 
-	// TODO: Draw your game objects here (e.g., SDL_RenderCopy, SDL_RenderFillRect)
+	/* TODO: Draw your game objects here (e.g., SDL_RenderCopy, SDL_RenderFillRect) */
 
-	// Present the back buffer to the screen
+	/* Present the back buffer to the screen */
 	SDL_RenderPresent(game->renderer);
 }
 
-// Free resources and shut down SDL
+/* Free resources and shut down SDL */
 void cleanup(GameState *game)
 {
 	if (game->renderer) {
@@ -109,6 +134,9 @@ int main(__attribute__((unused)) int argc, __attribute__((unused)) char *argv[])
 {
 	GameState game = {0};
 
+	if (read_png_files())
+		exit(1);
+
 	if (!init_game(&game)) {
 		return 1;
 	}
@@ -116,7 +144,7 @@ int main(__attribute__((unused)) int argc, __attribute__((unused)) char *argv[])
 	Uint32 last_frame_time = SDL_GetTicks();
 
 	while (game.is_running) {
-		// Calculate delta time
+		/* Calculate delta time */
 		Uint32 current_time = SDL_GetTicks();
 		float delta_time = (current_time - last_frame_time) / 1000.0f;
 
@@ -124,7 +152,7 @@ int main(__attribute__((unused)) int argc, __attribute__((unused)) char *argv[])
 		update(delta_time);
 		render(&game);
 
-		// Simple frame rate capping (if VSync isn't doing the job)
+		/* Simple frame rate capping (if VSync isn't doing the job) */
 		Uint32 time_to_wait = FRAME_TARGET_TIME - (SDL_GetTicks() - current_time);
 		if (time_to_wait > 0 && time_to_wait <= FRAME_TARGET_TIME) {
 			SDL_Delay(time_to_wait);
