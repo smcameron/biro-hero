@@ -4,8 +4,8 @@
 
 #include "png_utils.h"
 
-#define WINDOW_WIDTH 800
-#define WINDOW_HEIGHT 600
+#define WINDOW_WIDTH 1024
+#define WINDOW_HEIGHT 768
 #define TARGET_FPS 60
 #define FRAME_TARGET_TIME (1000 / TARGET_FPS)
 
@@ -49,18 +49,16 @@ bool init_game(GameState *game)
 
 	game->window = SDL_CreateWindow(
 		"SDL2 2D Game Template",
-		SDL_WINDOWPOS_CENTERED,
-		SDL_WINDOWPOS_CENTERED,
-		WINDOW_WIDTH,
-		WINDOW_HEIGHT,
-		SDL_WINDOW_SHOWN
-	);
+		SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
+		WINDOW_WIDTH, WINDOW_HEIGHT,
+		SDL_WINDOW_SHOWN);
 
 	if (!game->window) {
 		SDL_Log("Failed to create window: %s", SDL_GetError());
 		SDL_Quit();
 		return false;
 	}
+	SDL_SetWindowResizable(game->window, SDL_TRUE);
 
 	game->renderer = SDL_CreateRenderer(
 		game->window,
