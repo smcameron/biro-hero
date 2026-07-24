@@ -9,12 +9,16 @@
 #define TARGET_FPS 60
 #define FRAME_TARGET_TIME (1000 / TARGET_FPS)
 
+#define GAME_MODE_TITLE_SCREEN 0
+#define GAME_MODE_PLAY 1
+
 /* Game state struct to hold core systems */
-typedef struct {
+struct game_state {
 	SDL_Window *window;
 	SDL_Renderer *renderer;
 	bool is_running;
-} GameState;
+	int mode;
+} game = { 0 };
 
 struct image {
 	char *filename;
@@ -23,24 +27,34 @@ struct image {
 };
 
 struct image background_image = { "images/notebook-image.png", NULL, 0, 0, 0 };
+struct image title_screen_image = { "images/biro-hero-title-screen.png", NULL, 0, 0, 0 };
 
-static int read_png_files(void)
+static int load_png_image(struct image *i)
 {
 	char whynot[1000];
-	
-	background_image.data = png_utils_read_png_image(background_image.filename,
-			0, 0, 0, &background_image.width, &background_image.height,
-			&background_image.alpha, whynot, sizeof(whynot));
-	if (!background_image.data) {
+
+	i->data = png_utils_read_png_image(i->filename,
+			0, 0, 0, &i->width, &i->height,
+			&i->alpha, whynot, sizeof(whynot));
+	if (!i->data) {
 		fprintf(stderr, "Failed to load %s: %s\n",
-			background_image.filename, whynot);
+			i->filename, whynot);
 		return -1;
 	}
 	return 0;
 }
 
+static int read_png_files(void)
+{
+	int x = 0;
+
+	x += load_png_image(&background_image);
+	x += load_png_image(&title_screen_image);
+	return x;
+}
+
 /* Initialize SDL, window, and renderer */
-bool init_game(GameState *game)
+bool init_game(struct game_state *game)
 {
 	if (SDL_Init(SDL_INIT_VIDEO) != 0) {
 		SDL_Log("Unable to initialize SDL: %s", SDL_GetError());
@@ -48,7 +62,7 @@ bool init_game(GameState *game)
 	}
 
 	game->window = SDL_CreateWindow(
-		"SDL2 2D Game Template",
+		"BIRO - HERO",
 		SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
 		WINDOW_WIDTH, WINDOW_HEIGHT,
 		SDL_WINDOW_SHOWN);
@@ -77,8 +91,16 @@ bool init_game(GameState *game)
 	return true;
 }
 
+static void process_keydown(__attribute__((unused)) SDL_Event event)
+{
+	if (game.mode == GAME_MODE_TITLE_SCREEN) {
+		game.mode = GAME_MODE_PLAY;
+		return;
+	}
+}
+
 /* Handle input events (keyboard, mouse, window close) */
-void process_input(GameState *game)
+void process_input(struct game_state *game)
 {
 	SDL_Event event;
 	while (SDL_PollEvent(&event)) {
@@ -90,6 +112,7 @@ void process_input(GameState *game)
 			if (event.key.keysym.sym == SDLK_ESCAPE) {
 				game->is_running = false;
 			}
+			process_keydown(event);
 			break;
 		default:
 		break;
@@ -105,19 +128,33 @@ void update(__attribute__((unused)) float delta_time)
 
 static void draw_background_image(SDL_Renderer *renderer)
 {
-	SDL_Texture *image = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_ABGR8888,
-			SDL_TEXTUREACCESS_STATIC, background_image.width, background_image.height);
-	if (!image) {
-		fprintf(stderr, "Could not create texture for background image\n");
+	struct image *i;
+	SDL_Texture *bg;
+
+	i = &background_image;
+	switch (game.mode) {
+	case GAME_MODE_PLAY:
+		break;
+	case GAME_MODE_TITLE_SCREEN:
+		i = &title_screen_image;
+		break;
+	default:
+		i = &background_image;
+		break;
+	}
+	bg = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_ABGR8888,
+		SDL_TEXTUREACCESS_STATIC, i->width, i->height);
+	if (!bg) {
+		fprintf(stderr, "Could not create texture for %s\n", i->filename);
 		exit(1);
 	}
-	SDL_UpdateTexture(image, NULL, background_image.data, 4 * background_image.width);
-	SDL_RenderCopy(renderer, image, NULL, NULL);
-	SDL_DestroyTexture(image);
+	SDL_UpdateTexture(bg, NULL, i->data, 4 * i->width);
+	SDL_RenderCopy(renderer, bg, NULL, NULL);
+	SDL_DestroyTexture(bg);
 }
 
 /* Render graphics to the screen */
-void render(GameState *game)
+void render(struct game_state *game)
 {
 	/* Set draw color to dark gray / black background and clear screen */
 	SDL_SetRenderDrawColor(game->renderer, 30, 30, 30, 255);
@@ -131,7 +168,7 @@ void render(GameState *game)
 }
 
 /* Free resources and shut down SDL */
-void cleanup(GameState *game)
+void cleanup(struct game_state *game)
 {
 	if (game->renderer) {
 		SDL_DestroyRenderer(game->renderer);
@@ -144,8 +181,6 @@ void cleanup(GameState *game)
 
 int main(__attribute__((unused)) int argc, __attribute__((unused)) char *argv[])
 {
-	GameState game = {0};
-
 	if (read_png_files())
 		exit(1);
 
