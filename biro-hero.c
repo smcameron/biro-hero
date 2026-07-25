@@ -7,6 +7,7 @@
 
 #include "png_utils.h"
 #include "snis_alloc.h"
+#include "stacktrace.h"
 
 #define WINDOW_WIDTH (1024 * 1.2)
 #define WINDOW_HEIGHT (768 * 1.2)
@@ -23,10 +24,11 @@ struct game_state {
 	bool is_running;
 	int mode;
 	int current_level;
+	float camera_vx; /* Camera coords are in world coord system */
 	float camera_x;
-	float camera_vx;
 	float camera_min_x;
 	float camera_max_x;
+	float desired_camera_x;
 	int window_width, window_height;
 	struct snis_object_pool *objpool;
 } game = { 0 };
@@ -47,8 +49,11 @@ struct image {
 static struct game_object {
 	int type;
 	int i;			/* index into go[] */
-	float x, y;		/* position */
+	float x, y;		/* position in world coords */
+	float sx, sy;		/* position in screen coords */
 	int current_image;	/* index into object_type[o->type].image[]; */
+	float ticks;
+	float next_animation_tick;
 } go[MAX_GAME_OBJS];
 
 static struct game_object *player;
@@ -80,6 +85,19 @@ struct image hero_right_3 = { "images/hero-right-3.png", NULL, 0, 0, 0, 0, NULL,
 struct image hero_left_1 = { "images/hero-left-1.png", NULL, 0, 0, 0, 0, NULL, NULL };
 struct image hero_left_2 = { "images/hero-left-2.png", NULL, 0, 0, 0, 0, NULL, NULL };
 struct image hero_left_3 = { "images/hero-left-3.png", NULL, 0, 0, 0, 0, NULL, NULL };
+
+enum keyaction {
+	keyright,
+	keyleft,
+	keyup,
+	keydown,
+	keyjump,
+	keycrouch,
+	keyshoot,
+	keygrenade,
+};
+
+static int keypressed[6] = { 0 }; /* indexed by enum keyaction */
 
 static int load_png_image(SDL_Renderer *renderer, struct image *i, int image_mode)
 {
@@ -197,6 +215,39 @@ static void player_init(void)
 	player->x = 50;
 	player->y = 0;
 	player->type = OBJTYPE_PLAYER;
+	player->ticks = 0.0;
+	player->next_animation_tick = 0.0;
+}
+
+/* Functions to convert from world coords to screen coords */
+static float world_to_screenx(float x)
+{
+	float sx = x - game.camera_x + 512.0f;
+	sx = 100.0f + ((game.window_width - 200.0f) * sx) / 1024.0f;
+	return sx;
+}
+
+static float world_to_screeny(float y)
+{
+	float sy = ((game.window_height - 200.0f) * y) / 768.0f;
+	sy = sy + 100.0;
+	return sy;
+}
+
+/* Functions to convert from screen coords to world coords */
+static float screen_to_worldx(float sx)
+{
+	float x = sx - 100.0f;
+	x = (x * 1024.0f) / (game.window_width - 200.0f);
+	x = x + game.camera_x - 512.0f;
+	return x;
+}
+
+static float screen_to_worldy(float sy)
+{
+	float y = sy - 100.0f;
+	y = (y * 768.0f) / (game.window_height - 200.0f);
+	return y;
 }
 
 static void draw_object(SDL_Renderer *renderer, struct game_object *o)
@@ -204,17 +255,14 @@ static void draw_object(SDL_Renderer *renderer, struct game_object *o)
 	struct object_type_data *odt = &object_type[o->type];
 	struct image **im = odt->image;
 	int i = o->current_image;
-	float sx = odt->scalex;
-	float sy = odt->scaley;
-	float w = sx * im[i]->width;
-	float h = sy * im[i]->height;
-
-	float wsx = game.window_width / 1024.0;
-	float wsy = game.window_height / 768.0;
+	float scx = odt->scalex;
+	float scy = odt->scaley;
+	float w = scx * im[i]->width;
+	float h = scy * im[i]->height;
 
 	SDL_Rect destrect = {
-		o->x - 0.5 * w,
-		o->y - 0.5 * h,
+		world_to_screenx(o->x - 0.5 * w),
+		world_to_screeny(o->y - 0.5 * h),
 		w, h };
 
 	SDL_SetTextureBlendMode(im[i]->texture, SDL_BLENDMODE_MOD);
@@ -286,6 +334,38 @@ static void process_keydown(__attribute__((unused)) SDL_Event event)
 		game.mode = GAME_MODE_PLAY;
 		return;
 	}
+	switch (event.key.keysym.sym) {
+	case SDLK_RIGHT:
+		keypressed[keyright] = 1;
+		break;
+	case SDLK_LEFT:
+		keypressed[keyleft] = 1;
+		break;
+	case SDLK_UP:
+		keypressed[keyup] = 1;
+		break;
+	case SDLK_DOWN:
+		keypressed[keydown] = 1;
+		break;
+	}
+}
+
+static void process_keyup(__attribute__((unused)) SDL_Event event)
+{
+	switch (event.key.keysym.sym) {
+	case SDLK_RIGHT:
+		keypressed[keyright] = 0;
+		break;
+	case SDLK_LEFT:
+		keypressed[keyleft] = 0;
+		break;
+	case SDLK_UP:
+		keypressed[keyup] = 0;
+		break;
+	case SDLK_DOWN:
+		keypressed[keydown] = 0;
+		break;
+	}
 }
 
 /* Handle input events (keyboard, mouse, window close) */
@@ -303,6 +383,9 @@ void process_input(struct game_state *game)
 			}
 			process_keydown(event);
 			break;
+		case SDL_KEYUP:
+			process_keyup(event);
+			break;
 		default:
 		break;
 		}
@@ -310,9 +393,57 @@ void process_input(struct game_state *game)
 }
 
 /* Update game logic (positions, physics, AI) based on delta time */
-void update(__attribute__((unused)) float delta_time)
+void update(float delta_time)
 {
+	int do_player_animation = 0;
 	/* TODO: Add game logic updates here */
+#define PLAYER_VX 2
+#define PLAYER_VY 2
+	if (keypressed[keyleft]) {
+		player->x = player->x - PLAYER_VX;
+		if (player->x < 10.0)
+			player->x = 10.0;
+		if (player->current_image < 3)
+			player->current_image = 3;
+		do_player_animation = 1;
+	}
+	if (keypressed[keyright]) {
+		player->x = player->x + PLAYER_VX;
+		if (player->x > (level[0].nscreens * 1024.0f - 10.0))
+			player->x = level[0].nscreens * 1024.0f - 10.0;
+		if (player->current_image > 2)
+			player->current_image = 0;
+		do_player_animation = 1;
+	}
+	if (keypressed[keyup]) {
+		player->y = player->y - PLAYER_VY;
+		if (player->y < 10.0f)
+			player->y = 10.0f;
+		do_player_animation = 1;
+	}
+	if (keypressed[keydown]) {
+		if (player->y > 750.0f)
+			player->y = 750.0f;
+		player->y = player->y + PLAYER_VY;
+		do_player_animation = 1;
+	}
+	game.camera_x = player->x;
+	if (game.camera_x > game.camera_max_x)
+			game.camera_x = game.camera_max_x;
+	if (game.camera_x < game.camera_min_x)
+			game.camera_x = game.camera_min_x;
+
+	player->ticks += delta_time;
+	if (do_player_animation) {
+		if (player->ticks > player->next_animation_tick) {
+			player->next_animation_tick += 0.1;
+			player->current_image++;
+			if (player->current_image == 3)
+				player->current_image = 0;
+			if (player->current_image == 6)
+				player->current_image = 3;
+		}
+	}
 }
 
 static void draw_background_image(SDL_Renderer *renderer)
@@ -338,61 +469,86 @@ static void draw_background_image(SDL_Renderer *renderer)
 	}
 }
 
+static void checkrect(SDL_Rect *r)
+{
+	if (r->x < 0 || r->y < 0 || r->w < 0 || r->h < 0) {
+		printf("Bad rect: { %d, %d, %d, %d }\n", r->x, r->y, r->w, r->h);
+		stacktrace("bad rect");
+		abort();
+	}
+}
+
 static void draw_level(SDL_Renderer *renderer)
 {
-	int use_2nd_image = 0;
-	int img1, img2;
 	int width, height;
 
+	/* printf("--- Begin draw_level() ---\n"); */
+	/* Get the window dimensions and stash in the game state */
 	SDL_GetWindowSize(game.window, &width, &height);
 	game.window_width = width;
 	game.window_height = height;
 
-	/* figure out which images we need to draw */
-	img1 = (int) (game.camera_x - 512.0f) / 1024.0f;
-	float src1_startx = game.camera_x - (img1 * 1024.0f) - 512.0f;
-	float src1_stopx = 1024.0;
-	float src2_startx;
-	float src2_stopx;
+	/* Figure out which images we need to draw */
+	int img1 = (int) (game.camera_x - 512.0f) / 1024.0f;
+	int img2 = img1 + 1;
+	/* printf("img1 = %d, img2 = %d\n", img1, img2); */
 
-	float dest1_startx;
-	float dest1_width;
-	float dest2_startx;
-	float dest2_width;
+	/* Figure out which part of first image to draw (in world coords) */
+	float left_edge_x = fmodf((game.camera_x - 512.0f), 1024.0f);
+	float right_edge_x = left_edge_x + 1024.0f;
+	if (right_edge_x > 1024.0f)
+		right_edge_x = 1024.0f;
 
-	dest1_startx = 100;
-	dest1_width = ((1024.0f - src1_startx) / 1024.0) * 824.0f;
-	dest2_startx = dest1_width + dest1_startx;
-	dest2_width = ((1024.0f - dest2_startx) / 1024.0) * 824.0f;
-	dest2_width = 824.0f - dest1_width;
+	/* printf("left_edge_x = %f\n", left_edge_x); */
+	/* printf("right_edge_x = %f\n", right_edge_x); */
+	SDL_Rect src1rect = { left_edge_x, 0.0, right_edge_x - left_edge_x, 768.0f };
+	/* printf("src1rect = %d, %d, %d, %d\n", src1rect.x, src1rect.y, src1rect.w, src1rect.h); */
+	checkrect(&src1rect);
 
-	// fprintf(stderr, "ax1 = %f, ax2 = %f\n", src1_startx, src1_stopx);
+	/* Figure out which part of the screen to draw the 1st image to */
+	float left_sx = world_to_screenx(left_edge_x + img1 * 1024.0f);
+	float right_sx = world_to_screenx(right_edge_x + img1 * 1024.0f);
+	float top_sy = world_to_screeny(0.0f);
+	float bottom_sy = world_to_screeny(768.0f);
 
-	img2 = img1 + 1;
-	if (img2 >= level[game.current_level].nscreens)
-		use_2nd_image = 1;
-	else
-		use_2nd_image = 1;
-	src2_startx = 0.0;
-	src2_stopx = 1024.0 * ((824.0f - dest1_width) / 824.0f);
-	// fprintf(stderr, "bx1 = %f, bx2 = %f\n", src2_startx, src2_stopx);
+	/* printf("left_sx = %f, right_sx = %f, top_sy = %f, bottom_sy = %f\n",
+			left_sx, right_sx, top_sy, bottom_sy); */
 
-	float xscale = (float) width / 1024.0;
-	float yscale = (float) height / 768.0;
+	SDL_Rect dest1rect = { left_sx, top_sy, right_sx - left_sx, bottom_sy - top_sy };
+	/* printf("dest1rect = %d, %d, %d, %d\n", dest1rect.x, dest1rect.y, dest1rect.w, dest1rect.h); */
+	checkrect(&dest1rect);
 
-	SDL_Rect srcrect = { src1_startx, 0, src1_stopx - src1_startx, 768 };
-	SDL_Rect destrect = { xscale * dest1_startx, yscale * 100,
-				xscale * dest1_width, yscale * 568 };
 	SDL_SetTextureBlendMode(level[0].terrain[img1].texture, SDL_BLENDMODE_MOD);
-	SDL_RenderCopy(renderer, level[0].terrain[img1].texture, &srcrect, &destrect);
+	SDL_RenderCopy(renderer, level[0].terrain[img1].texture, &src1rect, &dest1rect);
 
-	if (use_2nd_image) {
-		SDL_Rect srcrect = { src2_startx, 0, src2_stopx - src2_startx, 768 };
-		SDL_Rect destrect = { xscale * dest2_startx, yscale * 100,
-					xscale * dest2_width, yscale * 568 };
-		SDL_SetTextureBlendMode(level[0].terrain[img2].texture, SDL_BLENDMODE_MOD);
-		SDL_RenderCopy(renderer, level[0].terrain[img2].texture, &srcrect, &destrect);
+	if (img2 >= level[0].nscreens) { /* Need to draw 2nd image? */
+		/* printf("Skipping image 2\n"); */
+		return;
 	}
+
+	/* Figure out which part of 2nd image to draw */
+	float left2_x = 0.0f;
+	float right2_x = fmodf(screen_to_worldx(game.window_width - 100.0f), 1024.0f);
+	float top2_y = 0.0f;
+	float bottom2_y = 768.0f;
+	/* printf("left2_x = %f, right2_x = %f, top2_y = %f, bottom2_y = %f\n",
+			left2_x, right2_x, top2_y, bottom2_y); */
+	SDL_Rect src2rect = { left2_x, top2_y, right2_x - left2_x, bottom2_y - top2_y };
+	/* printf("src2rect = { %d, %d, %d, %d }\n", src2rect.x, src2rect.y, src2rect.w, src2rect.h); */
+	checkrect(&src2rect);
+
+	/* Figure out which part of screen to draw the 2nd image to */
+	float left2_sx = right_sx;
+	float right2_sx = (game.window_width - 100.0f);
+	/* printf("left2_sx = %f, right2_sx = %f\n", left2_sx, right2_sx); */
+	SDL_Rect dest2rect = { left2_sx, top_sy, right2_sx - left2_sx, bottom_sy - top_sy };
+	/* printf("dest2rect = { %d, %d, %d, %d }\n", dest2rect.x, dest2rect.y, dest2rect.w, dest2rect.h); */
+	checkrect(&dest2rect);
+
+	/* printf("Drawing image 2\n"); */
+	SDL_SetTextureBlendMode(level[0].terrain[img2].texture, SDL_BLENDMODE_MOD);
+	SDL_RenderCopy(renderer, level[0].terrain[img2].texture, &src2rect, &dest2rect);
+	/* printf("--- End draw_level() ---\n"); */
 }
 
 /* Render graphics to the screen */
@@ -429,6 +585,26 @@ void cleanup(struct game_state *game)
 	SDL_Quit();
 }
 
+static void move_camera(void)
+{
+	if (game.camera_x == game.desired_camera_x)
+		return;
+
+	float dx = game.desired_camera_x - game.camera_x;
+	if (fabs(dx) < 2.1) {
+		game.camera_x = game.desired_camera_x;
+	}
+
+	game.camera_x += dx / 2.0;
+
+	if (game.camera_x >= game.camera_max_x) {
+		game.camera_x = game.camera_max_x;
+	}
+	if (game.camera_x <= game.camera_min_x) {
+		game.camera_x = game.camera_min_x;
+	}
+}
+
 int main(__attribute__((unused)) int argc, __attribute__((unused)) char *argv[])
 {
 	if (!init_game(&game)) {
@@ -447,7 +623,7 @@ int main(__attribute__((unused)) int argc, __attribute__((unused)) char *argv[])
 
 	Uint32 last_frame_time = SDL_GetTicks();
 
-	game.camera_vx = 1.5;
+	game.camera_vx = 0.0;
 	while (game.is_running) {
 		/* Calculate delta time */
 		Uint32 current_time = SDL_GetTicks();
@@ -462,16 +638,8 @@ int main(__attribute__((unused)) int argc, __attribute__((unused)) char *argv[])
 		if (time_to_wait > 0 && time_to_wait <= FRAME_TARGET_TIME) {
 			SDL_Delay(time_to_wait);
 		}
-
-		game.camera_x += game.camera_vx;
-		if (game.camera_x >= game.camera_max_x) {
-			game.camera_vx = -1.5f;
-			game.camera_x = game.camera_max_x;
-		}
-		if (game.camera_x <= game.camera_min_x) {
-			game.camera_vx = 1.5f;
-			game.camera_x = game.camera_min_x;
-		}
+		game.desired_camera_x = player->x;
+		move_camera();
 		last_frame_time = current_time;
 	}
 
