@@ -26,6 +26,7 @@ struct game_state {
 	float camera_vx;
 	float camera_min_x;
 	float camera_max_x;
+	int window_width, window_height;
 } game = { 0 };
 
 struct image {
@@ -42,11 +43,21 @@ struct image {
 #define MAX_GAME_OBJS 1000
 
 static struct game_object {
-	float x, y;
-	struct image image;
+	int type;
+	float x, y;	   /* position */
+	int current_image; /* index into object_type[o->type].image[]; */
 } go[MAX_GAME_OBJS];
 
 static struct game_object *player = &go[0];
+#define MAX_OBJECT_TYPES 50
+#define OBJTYPE_PLAYER 0
+
+static struct object_type_data {
+	struct image **image;
+	int nimages;
+	float scalex, scaley;
+	void (*draw)(SDL_Renderer *renderer, struct game_object *o);
+} object_type[MAX_OBJECT_TYPES] = { 0 };
 
 #define MAX_LEVELS 3
 #define MAX_SCREENS_PER_LEVEL 10
@@ -60,7 +71,12 @@ struct level {
 
 struct image background_image = { "images/notebook-image.png", NULL, 0, 0, 0, 0, NULL, NULL };
 struct image title_screen_image = { "images/biro-hero-title-screen.png", NULL, 0, 0, 0, 0, NULL, NULL };
-// struct image title_screen_image = { "images/level1/level-a1-bg.png", NULL, 0, 0, 0, 0, NULL, NULL };
+struct image hero_right_1 = { "images/hero-right-1.png", NULL, 0, 0, 0, 0, NULL, NULL };
+struct image hero_right_2 = { "images/hero-right-2.png", NULL, 0, 0, 0, 0, NULL, NULL };
+struct image hero_right_3 = { "images/hero-right-3.png", NULL, 0, 0, 0, 0, NULL, NULL };
+struct image hero_left_1 = { "images/hero-left-1.png", NULL, 0, 0, 0, 0, NULL, NULL };
+struct image hero_left_2 = { "images/hero-left-2.png", NULL, 0, 0, 0, 0, NULL, NULL };
+struct image hero_left_3 = { "images/hero-left-3.png", NULL, 0, 0, 0, 0, NULL, NULL };
 
 static int load_png_image(SDL_Renderer *renderer, struct image *i, int image_mode)
 {
@@ -68,6 +84,7 @@ static int load_png_image(SDL_Renderer *renderer, struct image *i, int image_mod
 
 	i->surface = NULL;
 	i->texture = NULL;
+	fprintf(stderr, "Decoding PNG file %s\n", i->filename);
 	i->data = png_utils_read_png_image(i->filename,
 			0, 0, 0, &i->width, &i->height,
 			&i->alpha, whynot, sizeof(whynot));
@@ -109,6 +126,12 @@ static int read_png_files(SDL_Renderer *renderer)
 
 	x += load_png_image(renderer, &background_image, IMAGE_MODE_TEXTURE);
 	x += load_png_image(renderer, &title_screen_image, IMAGE_MODE_TEXTURE);
+	x += load_png_image(renderer, &hero_right_1, IMAGE_MODE_TEXTURE);
+	x += load_png_image(renderer, &hero_right_2, IMAGE_MODE_TEXTURE);
+	x += load_png_image(renderer, &hero_right_3, IMAGE_MODE_TEXTURE);
+	x += load_png_image(renderer, &hero_left_1, IMAGE_MODE_TEXTURE);
+	x += load_png_image(renderer, &hero_left_2, IMAGE_MODE_TEXTURE);
+	x += load_png_image(renderer, &hero_left_3, IMAGE_MODE_TEXTURE);
 	return x;
 }
 
@@ -159,6 +182,52 @@ static int read_levels(SDL_Renderer *renderer)
 	return x;
 }
 
+static void player_init(void)
+{
+	player->x = 50;
+	player->y = 0;
+	player->type = OBJTYPE_PLAYER;
+}
+
+static void draw_object(SDL_Renderer *renderer, struct game_object *o)
+{
+	struct object_type_data *odt = &object_type[o->type];
+	struct image **im = odt->image;
+	int i = o->current_image;
+	float sx = odt->scalex;
+	float sy = odt->scaley;
+	float w = sx * im[i]->width;
+	float h = sy * im[i]->height;
+
+	float wsx = game.window_width / 1024.0;
+	float wsy = game.window_height / 768.0;
+
+	SDL_Rect destrect = {
+		o->x - 0.5 * w,
+		o->y - 0.5 * h,
+		w, h };
+
+	SDL_SetTextureBlendMode(im[i]->texture, SDL_BLENDMODE_MOD);
+	SDL_RenderCopy(renderer, im[i]->texture, NULL, &destrect);
+}
+
+static void set_up_object_type_data(void)
+{
+	/* Setup OBJTYPE_PLAYER data */
+	int n = OBJTYPE_PLAYER;
+	object_type[n].image = malloc(6 * sizeof(*object_type[0].image));
+	object_type[n].image[0] = &hero_right_1;
+	object_type[n].image[1] = &hero_right_2;
+	object_type[n].image[2] = &hero_right_3;
+	object_type[n].image[3] = &hero_left_1;
+	object_type[n].image[4] = &hero_left_2;
+	object_type[n].image[5] = &hero_left_3;
+	object_type[n].nimages = 6;
+	object_type[n].scalex = 0.25;
+	object_type[n].scaley = 0.25;
+	object_type[n].draw = draw_object;
+}
+
 /* Initialize SDL, window, and renderer */
 bool init_game(struct game_state *game)
 {
@@ -195,6 +264,7 @@ bool init_game(struct game_state *game)
 
 	game->is_running = true;
 	game->camera_x = 1024.0 / 2.0;
+	player_init();
 	return true;
 }
 
@@ -258,13 +328,13 @@ static void draw_background_image(SDL_Renderer *renderer)
 
 static void draw_level(SDL_Renderer *renderer)
 {
-	if (game.mode != GAME_MODE_PLAY)
-		return;
 	int use_2nd_image = 0;
 	int img1, img2;
 	int width, height;
 
 	SDL_GetWindowSize(game.window, &width, &height);
+	game.window_width = width;
+	game.window_height = height;
 
 	/* figure out which images we need to draw */
 	img1 = (int) (game.camera_x - 512.0f) / 1024.0f;
@@ -322,8 +392,12 @@ void render(struct game_state *game)
 
 	/* TODO: Draw your game objects here (e.g., SDL_RenderCopy, SDL_RenderFillRect) */
 	draw_background_image(game->renderer);
+	if (game->mode != GAME_MODE_PLAY)
+		goto done;
 	draw_level(game->renderer);
+	object_type[go[0].type].draw(game->renderer, &go[0]);
 
+done:
 	/* Present the back buffer to the screen */
 	SDL_RenderPresent(game->renderer);
 }
@@ -352,6 +426,11 @@ int main(__attribute__((unused)) int argc, __attribute__((unused)) char *argv[])
 		exit(1);
 	if (read_levels(game.renderer))
 		exit(1);
+	set_up_object_type_data();
+	go[0].x = 100;
+	go[0].y = 100;
+	go[0].type = OBJTYPE_PLAYER;
+	go[0].current_image = 0;
 
 	Uint32 last_frame_time = SDL_GetTicks();
 
