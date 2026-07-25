@@ -6,6 +6,7 @@
 #include <limits.h>
 
 #include "png_utils.h"
+#include "snis_alloc.h"
 
 #define WINDOW_WIDTH (1024 * 1.2)
 #define WINDOW_HEIGHT (768 * 1.2)
@@ -27,6 +28,7 @@ struct game_state {
 	float camera_min_x;
 	float camera_max_x;
 	int window_width, window_height;
+	struct snis_object_pool *objpool;
 } game = { 0 };
 
 struct image {
@@ -44,11 +46,12 @@ struct image {
 
 static struct game_object {
 	int type;
-	float x, y;	   /* position */
-	int current_image; /* index into object_type[o->type].image[]; */
+	int i;			/* index into go[] */
+	float x, y;		/* position */
+	int current_image;	/* index into object_type[o->type].image[]; */
 } go[MAX_GAME_OBJS];
 
-static struct game_object *player = &go[0];
+static struct game_object *player;
 #define MAX_OBJECT_TYPES 50
 #define OBJTYPE_PLAYER 0
 
@@ -184,6 +187,13 @@ static int read_levels(SDL_Renderer *renderer)
 
 static void player_init(void)
 {
+	int i = snis_object_pool_alloc_obj(game.objpool);
+	if (i < 0) {
+		fprintf(stderr, "Failed to allocated player object\n");
+		exit(1);
+	}
+	player = &go[i];
+	player->i = i;
 	player->x = 50;
 	player->y = 0;
 	player->type = OBJTYPE_PLAYER;
@@ -264,7 +274,9 @@ bool init_game(struct game_state *game)
 
 	game->is_running = true;
 	game->camera_x = 1024.0 / 2.0;
+	snis_object_pool_setup(&game->objpool, MAX_GAME_OBJS);
 	player_init();
+
 	return true;
 }
 
@@ -413,6 +425,7 @@ void cleanup(struct game_state *game)
 	if (game->window) {
 		SDL_DestroyWindow(game->window);
 	}
+	snis_object_pool_free_object(game->objpool, player->i);
 	SDL_Quit();
 }
 

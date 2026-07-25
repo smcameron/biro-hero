@@ -7,12 +7,18 @@ LIBS=${SDLLIBS} -lpng -lm
 CFLAGS=-fsanitize=address -Wall -Wextra --pedantic ${SDLCFLAGS} -g3
 LDFLAGS=-fsanitize=address
 
-OBJFILES=png_utils.o
+OBJFILES=png_utils.o snis_alloc.o stacktrace.o
 
 all:	biro-hero
 
 png_utils.o:	png_utils.c png_utils.h
 	${CC} ${CFLAGS} -c -o png_utils.o png_utils.c
+
+snis_alloc.o:	snis_alloc.h snis_alloc.c stacktrace.h
+	${CC} ${CFLAGS} -c -o snis_alloc.o snis_alloc.c
+
+stacktrace.o:	stacktrace.h stacktrace.c
+	${CC} ${CFLAGS} -c -o stacktrace.o stacktrace.c
 
 biro-hero.o:	biro-hero.c png_utils.h
 	${CC} ${CFLAGS} -c -o biro-hero.o  biro-hero.c
