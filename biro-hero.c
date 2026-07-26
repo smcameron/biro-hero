@@ -255,8 +255,10 @@ static void draw_object(SDL_Renderer *renderer, struct game_object *o)
 	struct object_type_data *odt = &object_type[o->type];
 	struct image **im = odt->image;
 	int i = o->current_image;
-	float scx = odt->scalex;
-	float scy = odt->scaley;
+	float windowx_scale = game.window_width / WINDOW_WIDTH;
+	float windowy_scale = game.window_height / WINDOW_HEIGHT;
+	float scx = odt->scalex * windowx_scale;
+	float scy = odt->scaley * windowy_scale;
 	float w = scx * im[i]->width;
 	float h = scy * im[i]->height;
 
