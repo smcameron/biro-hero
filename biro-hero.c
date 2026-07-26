@@ -338,15 +338,19 @@ static void process_keydown(__attribute__((unused)) SDL_Event event)
 	}
 	switch (event.key.keysym.sym) {
 	case SDLK_RIGHT:
+	case SDLK_d:
 		keypressed[keyright] = 1;
 		break;
 	case SDLK_LEFT:
+	case SDLK_a:
 		keypressed[keyleft] = 1;
 		break;
 	case SDLK_UP:
+	case SDLK_w:
 		keypressed[keyup] = 1;
 		break;
 	case SDLK_DOWN:
+	case SDLK_s:
 		keypressed[keydown] = 1;
 		break;
 	}
@@ -356,15 +360,19 @@ static void process_keyup(__attribute__((unused)) SDL_Event event)
 {
 	switch (event.key.keysym.sym) {
 	case SDLK_RIGHT:
+	case SDLK_d:
 		keypressed[keyright] = 0;
 		break;
 	case SDLK_LEFT:
+	case SDLK_a:
 		keypressed[keyleft] = 0;
 		break;
 	case SDLK_UP:
+	case SDLK_w:
 		keypressed[keyup] = 0;
 		break;
 	case SDLK_DOWN:
+	case SDLK_s:
 		keypressed[keydown] = 0;
 		break;
 	}
