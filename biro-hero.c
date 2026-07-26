@@ -438,7 +438,7 @@ void update(float delta_time)
 	player->ticks += delta_time;
 	if (do_player_animation) {
 		if (player->ticks > player->next_animation_tick) {
-			player->next_animation_tick += 0.1;
+			player->next_animation_tick = player->ticks + 0.1;
 			player->current_image++;
 			if (player->current_image == 3)
 				player->current_image = 0;
