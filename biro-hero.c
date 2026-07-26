@@ -39,9 +39,8 @@ struct image {
 	int width, height, alpha;
 	int mode;
 #define IMAGE_MODE_TEXTURE 1
-#define IMAGE_MODE_SURFACE 2
+#define IMAGE_MODE_RAW 2
 	SDL_Texture *texture;
-	SDL_Surface *surface;
 };
 
 #define MAX_GAME_OBJS 1000
@@ -73,18 +72,19 @@ static struct object_type_data {
 struct level {
 	int level_number;
 	int nscreens;
+	int ncolor_codings;
 	struct image terrain[MAX_SCREENS_PER_LEVEL];
 	struct image collision_mask[MAX_SCREENS_PER_LEVEL];
 } level[MAX_LEVELS] = { 0 };
 
-struct image background_image = { "images/notebook-image.png", NULL, 0, 0, 0, 0, NULL, NULL };
-struct image title_screen_image = { "images/biro-hero-title-screen.png", NULL, 0, 0, 0, 0, NULL, NULL };
-struct image hero_right_1 = { "images/hero-right-1.png", NULL, 0, 0, 0, 0, NULL, NULL };
-struct image hero_right_2 = { "images/hero-right-2.png", NULL, 0, 0, 0, 0, NULL, NULL };
-struct image hero_right_3 = { "images/hero-right-3.png", NULL, 0, 0, 0, 0, NULL, NULL };
-struct image hero_left_1 = { "images/hero-left-1.png", NULL, 0, 0, 0, 0, NULL, NULL };
-struct image hero_left_2 = { "images/hero-left-2.png", NULL, 0, 0, 0, 0, NULL, NULL };
-struct image hero_left_3 = { "images/hero-left-3.png", NULL, 0, 0, 0, 0, NULL, NULL };
+struct image background_image = { "images/notebook-image.png", NULL, 0, 0, 0, 0, NULL, };
+struct image title_screen_image = { "images/biro-hero-title-screen.png", NULL, 0, 0, 0, 0, NULL, };
+struct image hero_right_1 = { "images/hero-right-1.png", NULL, 0, 0, 0, 0, NULL, };
+struct image hero_right_2 = { "images/hero-right-2.png", NULL, 0, 0, 0, 0, NULL, };
+struct image hero_right_3 = { "images/hero-right-3.png", NULL, 0, 0, 0, 0, NULL, };
+struct image hero_left_1 = { "images/hero-left-1.png", NULL, 0, 0, 0, 0, NULL, };
+struct image hero_left_2 = { "images/hero-left-2.png", NULL, 0, 0, 0, 0, NULL, };
+struct image hero_left_3 = { "images/hero-left-3.png", NULL, 0, 0, 0, 0, NULL, };
 
 enum keyaction {
 	keyright,
@@ -103,7 +103,6 @@ static int load_png_image(SDL_Renderer *renderer, struct image *i, int image_mod
 {
 	char whynot[1000];
 
-	i->surface = NULL;
 	i->texture = NULL;
 	fprintf(stderr, "Decoding PNG file %s\n", i->filename);
 	i->data = png_utils_read_png_image(i->filename,
@@ -124,9 +123,6 @@ static int load_png_image(SDL_Renderer *renderer, struct image *i, int image_mod
 		}
 		SDL_UpdateTexture(i->texture, NULL, i->data, 4 * i->width);
 	}
-	if (i->mode & IMAGE_MODE_SURFACE) {
-		/* TODO: surface stuff */
-	}
 	return 0;
 }
 
@@ -135,9 +131,10 @@ static void image_cleanup(struct image *i)
 	if (i->texture) {
 		SDL_DestroyTexture(i->texture);
 		i->texture = NULL;
-	}
-	if (i->surface) {
-		/* TODO: surface stuff */
+		if (i->data) {
+			free(i->data);
+			i->data = NULL;
+		}
 	}
 }
 
@@ -172,30 +169,54 @@ static int read_levels(SDL_Renderer *renderer)
 		if (strcmp(namelist[i]->d_name, ".") == 0 ||
 			strcmp(namelist[i]->d_name, "..") == 0)
 			continue;
-		fprintf(stderr, "Reading level background image %s\n", namelist[i]->d_name);
-		snprintf(path, sizeof(path), "%s/%s", "images/level1", namelist[i]->d_name);
-		free(namelist[i]);
-		level[0].terrain[n].filename = strdup(path);
-		level[0].terrain[n].data = NULL;
-		level[0].terrain[n].width = 0;
-		level[0].terrain[n].height = 0;
-		level[0].terrain[n].alpha = 0;
-		level[0].terrain[n].mode = 0;
-		level[0].terrain[n].texture = NULL;
-		level[0].terrain[n].surface = NULL;
-		x += load_png_image(renderer, &level[0].terrain[n], IMAGE_MODE_TEXTURE);
-		printf("x = %d\n", x);
-		printf("level[0].terrain[%d].filename = %s\n", n, level[0].terrain[n].filename);
-		printf("level[0].terrain[%d].data = %p\n", n, level[0].terrain[n].data);
-		printf("level[0].terrain[%d].width = %d\n", n, level[0].terrain[n].width);
-		printf("level[0].terrain[%d].height = %d\n", n, level[0].terrain[n].height);
-		printf("level[0].terrain[%d].alpha = %d\n", n, level[0].terrain[n].alpha);
-		printf("level[0].terrain[%d].mode = %d\n", n, level[0].terrain[n].mode);
-		printf("level[0].terrain[%d].texture = %p\n", n, (void *) level[0].terrain[n].texture);
-		printf("level[0].terrain[%d].surface = %p\n", n, (void *) level[0].terrain[n].surface);
-		SDL_SetTextureBlendMode(level[0].terrain[n].texture, SDL_BLENDMODE_BLEND);
-		n++;
-		level[0].nscreens = n;
+		/* Is it a level background image? */
+		if (strncmp(namelist[i]->d_name, "level-", 6) == 0) {
+			fprintf(stderr, "Reading level background image %s\n", namelist[i]->d_name);
+			snprintf(path, sizeof(path), "%s/%s", "images/level1", namelist[i]->d_name);
+			free(namelist[i]);
+			level[0].terrain[n].filename = strdup(path);
+			level[0].terrain[n].data = NULL;
+			level[0].terrain[n].width = 0;
+			level[0].terrain[n].height = 0;
+			level[0].terrain[n].alpha = 0;
+			level[0].terrain[n].mode = 0;
+			level[0].terrain[n].texture = NULL;
+			x += load_png_image(renderer, &level[0].terrain[n], IMAGE_MODE_TEXTURE);
+			printf("x = %d\n", x);
+			printf("level[0].terrain[%d].filename = %s\n", n, level[0].terrain[n].filename);
+			printf("level[0].terrain[%d].data = %p\n", n, level[0].terrain[n].data);
+			printf("level[0].terrain[%d].width = %d\n", n, level[0].terrain[n].width);
+			printf("level[0].terrain[%d].height = %d\n", n, level[0].terrain[n].height);
+			printf("level[0].terrain[%d].alpha = %d\n", n, level[0].terrain[n].alpha);
+			printf("level[0].terrain[%d].mode = %d\n", n, level[0].terrain[n].mode);
+			printf("level[0].terrain[%d].texture = %p\n", n, (void *) level[0].terrain[n].texture);
+			SDL_SetTextureBlendMode(level[0].terrain[n].texture, SDL_BLENDMODE_BLEND);
+			n++;
+			level[0].nscreens++;
+		} else if (strncmp(namelist[i]->d_name, "map-code-", 9) == 0) {
+			/* Is it a color coding for moveable areas and ladders and so on? */
+			fprintf(stderr, "Reading level color coding image %s\n", namelist[i]->d_name);
+			snprintf(path, sizeof(path), "%s/%s", "images/level1", namelist[i]->d_name);
+			free(namelist[i]);
+			level[0].terrain[n].filename = strdup(path);
+			level[0].terrain[n].data = NULL;
+			level[0].terrain[n].width = 0;
+			level[0].terrain[n].height = 0;
+			level[0].terrain[n].alpha = 0;
+			level[0].terrain[n].mode = 0;
+			level[0].terrain[n].texture = NULL;
+			x += load_png_image(renderer, &level[0].terrain[n], IMAGE_MODE_RAW);
+			printf("x = %d\n", x);
+			printf("level[0].terrain[%d].filename = %s\n", n, level[0].terrain[n].filename);
+			printf("level[0].terrain[%d].data = %p\n", n, level[0].terrain[n].data);
+			printf("level[0].terrain[%d].width = %d\n", n, level[0].terrain[n].width);
+			printf("level[0].terrain[%d].height = %d\n", n, level[0].terrain[n].height);
+			printf("level[0].terrain[%d].alpha = %d\n", n, level[0].terrain[n].alpha);
+			printf("level[0].terrain[%d].mode = %d\n", n, level[0].terrain[n].mode);
+			printf("level[0].terrain[%d].texture = %p\n", n, (void *) level[0].terrain[n].texture);
+			n++;
+			level[0].ncolor_codings++;
+		}
 	}
 	game.camera_min_x = 512.0f;
 	game.camera_max_x = 1024.0f * level[0].nscreens - 512.0f;
