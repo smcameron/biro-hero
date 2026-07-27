@@ -186,49 +186,58 @@ static int read_levels(SDL_Renderer *renderer)
 			continue;
 		/* Is it a level background image? */
 		if (strncmp(namelist[i]->d_name, "level-", 6) == 0) {
+			int ns = level[0].nscreens;
 			fprintf(stderr, "Reading level background image %s\n", namelist[i]->d_name);
 			snprintf(path, sizeof(path), "%s/%s", "images/level1", namelist[i]->d_name);
 			free(namelist[i]);
-			level[0].terrain[n].filename = strdup(path);
-			level[0].terrain[n].data = NULL;
-			level[0].terrain[n].width = 0;
-			level[0].terrain[n].height = 0;
-			level[0].terrain[n].alpha = 0;
-			level[0].terrain[n].mode = 0;
-			level[0].terrain[n].texture = NULL;
-			x += load_png_image(renderer, &level[0].terrain[n], IMAGE_MODE_TEXTURE);
+			level[0].terrain[ns].filename = strdup(path);
+			level[0].terrain[ns].data = NULL;
+			level[0].terrain[ns].width = 0;
+			level[0].terrain[ns].height = 0;
+			level[0].terrain[ns].alpha = 0;
+			level[0].terrain[ns].mode = 0;
+			level[0].terrain[ns].texture = NULL;
+			x += load_png_image(renderer, &level[0].terrain[ns], IMAGE_MODE_TEXTURE);
 			printf("x = %d\n", x);
-			printf("level[0].terrain[%d].filename = %s\n", n, level[0].terrain[n].filename);
-			printf("level[0].terrain[%d].data = %p\n", n, level[0].terrain[n].data);
-			printf("level[0].terrain[%d].width = %d\n", n, level[0].terrain[n].width);
-			printf("level[0].terrain[%d].height = %d\n", n, level[0].terrain[n].height);
-			printf("level[0].terrain[%d].alpha = %d\n", n, level[0].terrain[n].alpha);
-			printf("level[0].terrain[%d].mode = %d\n", n, level[0].terrain[n].mode);
-			printf("level[0].terrain[%d].texture = %p\n", n, (void *) level[0].terrain[n].texture);
-			SDL_SetTextureBlendMode(level[0].terrain[n].texture, SDL_BLENDMODE_BLEND);
+			printf("level[0].terrain[%d].filename = %s\n", n, level[0].terrain[ns].filename);
+			printf("level[0].terrain[%d].data = %p\n", n, level[0].terrain[ns].data);
+			printf("level[0].terrain[%d].width = %d\n", n, level[0].terrain[ns].width);
+			printf("level[0].terrain[%d].height = %d\n", n, level[0].terrain[ns].height);
+			printf("level[0].terrain[%d].alpha = %d\n", n, level[0].terrain[ns].alpha);
+			printf("level[0].terrain[%d].mode = %d\n", n, level[0].terrain[ns].mode);
+			printf("level[0].terrain[%d].texture = %p\n", n, (void *) level[0].terrain[ns].texture);
+			SDL_SetTextureBlendMode(level[0].terrain[ns].texture, SDL_BLENDMODE_BLEND);
 			n++;
 			level[0].nscreens++;
 		} else if (strncmp(namelist[i]->d_name, "map-code-", 9) == 0) {
 			/* Is it a color coding for moveable areas and ladders and so on? */
+			int nc = level[0].ncolor_codings;
 			fprintf(stderr, "Reading level color coding image %s\n", namelist[i]->d_name);
 			snprintf(path, sizeof(path), "%s/%s", "images/level1", namelist[i]->d_name);
 			free(namelist[i]);
-			level[0].terrain[n].filename = strdup(path);
-			level[0].terrain[n].data = NULL;
-			level[0].terrain[n].width = 0;
-			level[0].terrain[n].height = 0;
-			level[0].terrain[n].alpha = 0;
-			level[0].terrain[n].mode = 0;
-			level[0].terrain[n].texture = NULL;
-			x += load_png_image(renderer, &level[0].terrain[n], IMAGE_MODE_RAW);
+			level[0].collision_mask[nc].filename = strdup(path);
+			level[0].collision_mask[nc].data = NULL;
+			level[0].collision_mask[nc].width = 0;
+			level[0].collision_mask[nc].height = 0;
+			level[0].collision_mask[nc].alpha = 0;
+			level[0].collision_mask[nc].mode = 0;
+			level[0].collision_mask[nc].texture = NULL;
+			x += load_png_image(renderer, &level[0].collision_mask[nc], IMAGE_MODE_RAW);
 			printf("x = %d\n", x);
-			printf("level[0].terrain[%d].filename = %s\n", n, level[0].terrain[n].filename);
-			printf("level[0].terrain[%d].data = %p\n", n, level[0].terrain[n].data);
-			printf("level[0].terrain[%d].width = %d\n", n, level[0].terrain[n].width);
-			printf("level[0].terrain[%d].height = %d\n", n, level[0].terrain[n].height);
-			printf("level[0].terrain[%d].alpha = %d\n", n, level[0].terrain[n].alpha);
-			printf("level[0].terrain[%d].mode = %d\n", n, level[0].terrain[n].mode);
-			printf("level[0].terrain[%d].texture = %p\n", n, (void *) level[0].terrain[n].texture);
+			printf("level[0].collision_mask[%d].filename = %s\n",
+				n, level[0].collision_mask[nc].filename);
+			printf("level[0].collision_mask[%d].data = %p\n",
+				n, level[0].collision_mask[nc].data);
+			printf("level[0].collision_mask[%d].width = %d\n",
+				n, level[0].collision_mask[nc].width);
+			printf("level[0].collision_mask[%d].height = %d\n",
+				n, level[0].collision_mask[nc].height);
+			printf("level[0].collision_mask[%d].alpha = %d\n",
+				n, level[0].collision_mask[nc].alpha);
+			printf("level[0].collision_mask[%d].mode = %d\n",
+				n, level[0].collision_mask[nc].mode);
+			printf("level[0].collision_mask[%d].texture = %p\n",
+				n, (void *) level[0].collision_mask[nc].texture);
 			n++;
 			level[0].ncolor_codings++;
 		}
