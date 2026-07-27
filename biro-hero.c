@@ -458,7 +458,6 @@ void update(float delta_time)
 		player->y = player->y + PLAYER_VY;
 		do_player_animation = 1;
 	}
-	game.camera_x = player->x;
 	if (game.camera_x > game.camera_max_x)
 			game.camera_x = game.camera_max_x;
 	if (game.camera_x < game.camera_min_x)
@@ -618,6 +617,11 @@ void cleanup(struct game_state *game)
 
 static void move_camera(void)
 {
+	if (player->current_image >= 0 && player->current_image <= 2) /* player facing right? */
+		game.desired_camera_x = player->x + 128.0f; /* move camera to right */
+	if (player->current_image >= 3 && player->current_image <= 5) /* player facing left? */
+		game.desired_camera_x = player->x - 128.0f; /* move camera to left */
+
 	if (game.camera_x == game.desired_camera_x)
 		return;
 
@@ -626,8 +630,9 @@ static void move_camera(void)
 		game.camera_x = game.desired_camera_x;
 	}
 
-	game.camera_x += dx / 2.0;
+	game.camera_x += dx / 25.0; /* ease camera towards desired location */
 
+	/* limit camera motion near edges of play area */
 	if (game.camera_x >= game.camera_max_x) {
 		game.camera_x = game.camera_max_x;
 	}
@@ -669,7 +674,6 @@ int main(__attribute__((unused)) int argc, __attribute__((unused)) char *argv[])
 		if (time_to_wait > 0 && time_to_wait <= FRAME_TARGET_TIME) {
 			SDL_Delay(time_to_wait);
 		}
-		game.desired_camera_x = player->x;
 		move_camera();
 		last_frame_time = current_time;
 	}
