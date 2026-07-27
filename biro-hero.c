@@ -99,6 +99,16 @@ enum keyaction {
 
 static int keypressed[6] = { 0 }; /* indexed by enum keyaction */
 
+static void draw_rectangle(SDL_Renderer *renderer,
+	float x, float y, float w, float h, int filled)
+{
+	SDL_Rect r = { x, y, w, h };
+	if (filled)
+		SDL_RenderFillRect(renderer, &r);
+	else
+		SDL_RenderDrawRect(renderer, &r);
+}
+
 static int load_png_image(SDL_Renderer *renderer, struct image *i, int image_mode)
 {
 	char whynot[1000];
