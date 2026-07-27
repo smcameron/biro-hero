@@ -9,6 +9,8 @@
 #include "snis_alloc.h"
 #include "stacktrace.h"
 #include "vec3.h"
+#include "wwviaudio.h"
+#include "ogg_to_pcm.h"
 
 #define WINDOW_WIDTH (1024 * 1.2)
 #define WINDOW_HEIGHT (768 * 1.2)
@@ -773,6 +775,7 @@ void cleanup(struct game_state *game)
 	}
 	snis_object_pool_free_object(game->objpool, player->i);
 	SDL_Quit();
+	wwviaudio_stop_portaudio();
 }
 
 static void move_camera(void)
@@ -801,12 +804,21 @@ static void move_camera(void)
 	}
 }
 
+static void setup_audio_system(void)
+{
+	if (wwviaudio_initialize_portaudio(30, 100) != 0) {
+		fprintf(stderr, "Audio system initialization failed.\n");
+		exit(1);
+	}
+}
+
 int main(__attribute__((unused)) int argc, __attribute__((unused)) char *argv[])
 {
 	if (!init_game(&game)) {
 		return 1;
 	}
 
+	setup_audio_system();
 	if (read_png_files(game.renderer))
 		exit(1);
 	if (read_levels(game.renderer))
