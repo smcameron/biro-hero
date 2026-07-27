@@ -8,6 +8,7 @@
 #include "png_utils.h"
 #include "snis_alloc.h"
 #include "stacktrace.h"
+#include "vec3.h"
 
 #define WINDOW_WIDTH (1024 * 1.2)
 #define WINDOW_HEIGHT (768 * 1.2)
@@ -450,6 +451,36 @@ void process_input(struct game_state *game)
 		break;
 		}
 	}
+}
+
+static void sample_collision_mask(float wx, float wy, union vec3 *color)
+{
+	int img = (int) wx / 1024.0f;
+
+	if (img < 0 || img >= level[0].ncolor_codings) {
+		fprintf(stderr, "sample_color_coded_map(): Bad image number %d\n", img);
+		return;
+	}
+
+	wx = fmodf(wx, 1024.0f);
+
+	/* Clamp coords in bounds */
+	if (wx < 0.0f)
+		wx = 0.0f;
+	if (wx > 1023.0)
+		wx = 1023.0;
+	if (wy < 0.0f)
+		wy = 0.0f;
+	if (wy > 767.0f)
+		wy = 767.0f;
+
+	int col = (int) wx;
+	int row = (int) wy;
+	uint8_t *pixel = (unsigned char *) &level[0].collision_mask[img].data[4 * row * 1024 + col];
+
+	color->r = (float) pixel[0] / 255.0;
+	color->g = (float) pixel[1] / 255.0;
+	color->b = (float) pixel[2] / 255.0;
 }
 
 static void move_object(struct game_object *o, float dx, float dy)
