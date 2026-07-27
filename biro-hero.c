@@ -114,6 +114,28 @@ static int debug_rects_on = 0;
 const union vec3 RED = { { 1.0f, 0.0f, 0.0f } };
 const union vec3 GREEN = { { 0.0f, 1.0f, 0.0f } };
 
+#define DIST_ARTILLERY1 0
+#define DIST_ARTILLERY2 1
+#define INCOMING_ARTILLERY 2
+#define LIGHT_MACHINE_GUN 3
+#define RIFLE_BURST_FIRE 4
+
+/* George Marsaglia's xorshift PRNG algorithm,
+ * see: https://en.wikipedia.org/wiki/Xorshift#Example_implementation
+ *
+ * The state word must be initialized to non-zero
+ */
+uint32_t xorshift(uint32_t *state)
+{
+	/* Algorithm "xor" from p. 4 of Marsaglia, "Xorshift RNGs" */
+	uint32_t x = *state;
+	x ^= x << 13;
+	x ^= x >> 17;
+	x ^= x << 5;
+	*state = x;
+	return x;
+}
+
 static void draw_rectangle(SDL_Renderer *renderer,
 	float x, float y, float w, float h, int filled)
 {
@@ -810,6 +832,23 @@ static void setup_audio_system(void)
 		fprintf(stderr, "Audio system initialization failed.\n");
 		exit(1);
 	}
+	wwviaudio_read_ogg_clip(DIST_ARTILLERY1, "sounds/distant-artillery1.ogg");
+	wwviaudio_read_ogg_clip(DIST_ARTILLERY2, "sounds/distant-artillery2.ogg");
+	wwviaudio_read_ogg_clip(INCOMING_ARTILLERY, "sounds/incoming-artillery.ogg");
+	wwviaudio_read_ogg_clip(LIGHT_MACHINE_GUN, "sounds/light-machine-gun.ogg");
+	wwviaudio_read_ogg_clip(RIFLE_BURST_FIRE, "sounds/rifle-burst-fire.ogg");
+}
+
+static void maybe_play_ambient_sounds(Uint32 now)
+{
+	static uint32_t randomseed = 0xa5a5a5a5;
+	static Uint32 next_time = 1500;
+
+	if (now > next_time) {
+		int s = (int) xorshift(&randomseed) % 5;
+		next_time = now + xorshift(&randomseed) % 4500 + 500;
+		wwviaudio_add_sound(s);
+	}
 }
 
 int main(__attribute__((unused)) int argc, __attribute__((unused)) char *argv[])
@@ -839,6 +878,7 @@ int main(__attribute__((unused)) int argc, __attribute__((unused)) char *argv[])
 
 		process_input(&game);
 		update(delta_time);
+		maybe_play_ambient_sounds(current_time);
 		render(&game);
 
 		/* Simple frame rate capping (if VSync isn't doing the job) */
