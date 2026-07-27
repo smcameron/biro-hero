@@ -100,10 +100,17 @@ enum keyaction {
 
 static int keypressed[6] = { 0 }; /* indexed by enum keyaction */
 
+#define NORTH 0
+#define EAST 1
+#define SOUTH 2
+#define WEST 3
 static const float xo[] = { 0, 1, 0, -1 };
 static const float yo[] = { -1, 0, 1, 0 };
 
 static int debug_rects_on = 0;
+
+const union vec3 RED = { { 1.0f, 0.0f, 0.0f } };
+const union vec3 GREEN = { { 0.0f, 1.0f, 0.0f } };
 
 static void draw_rectangle(SDL_Renderer *renderer,
 	float x, float y, float w, float h, int filled)
@@ -492,12 +499,12 @@ static void sample_mask_around_object(struct game_object *o, union vec3 *colors)
 	}
 }
 
-static void move_object(struct game_object *o, float dx, float dy)
+static void move_object(struct game_object *o, int direction, float dist)
 {
 	float newx, newy;
 
-	newx = o->x + dx;
-	newy = o->y + dy;
+	newx = o->x + xo[direction] * dist;
+	newy = o->y + yo[direction] * dist;
 
 	/* Keep things in bounds */
 	if (newx < 10.0)
@@ -509,8 +516,31 @@ static void move_object(struct game_object *o, float dx, float dy)
 	if (newy > 750.0f)
 		newy = 750.0f;
 
-	o->x = newx;
-	o->y = newy;
+	/* Check if there are walls that prevent us from moving there... */
+	struct object_type_data *odt = &object_type[o->type];
+	struct image *im = odt->image[0];
+	int imw = im->width * odt->scalex;
+	int imh = im->height * odt->scaley;
+	union vec3 color, red, green;
+
+	float samplex = newx + xo[direction] * imw * 0.5;
+	float sampley = newy + yo[direction] * imh * 0.5;
+	sample_collision_mask(samplex, sampley, &color);
+	red = RED;
+	green = GREEN;
+
+	/* Dot product to see if the colors are in the ballpark.
+	 * I don't know how to get Gimp to let me paint with pure colors.
+	 * It's blending things a bit at the edges, so we can't check for
+	 * an exact color match.
+	 */
+	float d1 = vec3_dot(&red, &color);
+	float d2 = vec3_dot(&green, &color);
+
+	if (d1 > 0.8 || d2 > 0.8) { /* in the ballpark of red or green? */
+		o->x = newx;
+		o->y = newy;
+	}
 }
 
 /* Update game logic (positions, physics, AI) based on delta time */
@@ -521,7 +551,7 @@ void update(float delta_time)
 #define PLAYER_VX 2
 #define PLAYER_VY 2
 	if (keypressed[keyleft]) {
-		move_object(player, -PLAYER_VX, 0.0f);
+		move_object(player, WEST, PLAYER_VX);
 		if (player->current_image <= 2 || player->current_image >= 6)
 			player->current_image = 3;  /* Make player face left */
 
@@ -530,15 +560,15 @@ void update(float delta_time)
 	if (keypressed[keyright]) {
 		if (player->current_image >= 3)
 			player->current_image = 0;  /* Make player face right */
-		move_object(player, PLAYER_VX, 0.0f);
+		move_object(player, EAST, PLAYER_VX);
 		do_player_animation = 1;
 	}
 	if (keypressed[keyup]) {
-		move_object(player, 0.0f, -PLAYER_VY);
+		move_object(player, NORTH, PLAYER_VY);
 		do_player_animation = 1;
 	}
 	if (keypressed[keydown]) {
-		move_object(player, 0.0f, PLAYER_VY);
+		move_object(player, SOUTH, PLAYER_VY);
 		do_player_animation = 1;
 	}
 	if (game.camera_x > game.camera_max_x)
