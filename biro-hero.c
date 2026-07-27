@@ -685,6 +685,27 @@ static void draw_debug_rectangles(struct game_object *o, union vec3 *v)
 	}
 }
 
+static void debug_sampling(void)
+{
+#if 0
+	for (int x = 0; x < 4 * 1024; x += 10) {
+		for (int y = 0; y < 768; y+= 10) {
+			union vec3 color;
+			sample_collision_mask(x, y, &color);
+			int sx = world_to_screenx(x);
+			int sy = world_to_screeny(y);
+
+			uint8_t r = (uint8_t) (color.r * 255);
+			uint8_t g = (uint8_t) (color.g * 255);
+			uint8_t b = (uint8_t) (color.b * 255);
+
+			SDL_SetRenderDrawColor(game.renderer, r, g, b, 255);
+			draw_rectangle(game.renderer, sx, sy, 5, 5, 1);
+		}
+	}
+#endif
+}
+
 /* Render graphics to the screen */
 void render(struct game_state *game)
 {
@@ -702,6 +723,7 @@ void render(struct game_state *game)
 	union vec3 colors[4];
 	sample_mask_around_object(&go[0], colors);
 	draw_debug_rectangles(player, colors);
+	debug_sampling();
 
 done:
 	/* Present the back buffer to the screen */
