@@ -423,6 +423,27 @@ void process_input(struct game_state *game)
 	}
 }
 
+static void move_object(struct game_object *o, float dx, float dy)
+{
+	float newx, newy;
+
+	newx = o->x + dx;
+	newy = o->y + dy;
+
+	/* Keep things in bounds */
+	if (newx < 10.0)
+		newx = 10.0;
+	if (newx > (level[0].nscreens * 1024.0f - 10.0))
+		newx = level[0].nscreens * 1024.0f - 10.0;
+	if (newy < 10.0f)
+		newy = 10.0f;
+	if (newy > 750.0f)
+		newy = 750.0f;
+
+	o->x = newx;
+	o->y = newy;
+}
+
 /* Update game logic (positions, physics, AI) based on delta time */
 void update(float delta_time)
 {
@@ -431,31 +452,24 @@ void update(float delta_time)
 #define PLAYER_VX 2
 #define PLAYER_VY 2
 	if (keypressed[keyleft]) {
-		player->x = player->x - PLAYER_VX;
-		if (player->x < 10.0)
-			player->x = 10.0;
-		if (player->current_image < 3)
-			player->current_image = 3;
+		move_object(player, -PLAYER_VX, 0.0f);
+		if (player->current_image <= 2 || player->current_image >= 6)
+			player->current_image = 3;  /* Make player face left */
+
 		do_player_animation = 1;
 	}
 	if (keypressed[keyright]) {
-		player->x = player->x + PLAYER_VX;
-		if (player->x > (level[0].nscreens * 1024.0f - 10.0))
-			player->x = level[0].nscreens * 1024.0f - 10.0;
-		if (player->current_image > 2)
-			player->current_image = 0;
+		if (player->current_image >= 3)
+			player->current_image = 0;  /* Make player face right */
+		move_object(player, PLAYER_VX, 0.0f);
 		do_player_animation = 1;
 	}
 	if (keypressed[keyup]) {
-		player->y = player->y - PLAYER_VY;
-		if (player->y < 10.0f)
-			player->y = 10.0f;
+		move_object(player, 0.0f, -PLAYER_VY);
 		do_player_animation = 1;
 	}
 	if (keypressed[keydown]) {
-		if (player->y > 750.0f)
-			player->y = 750.0f;
-		player->y = player->y + PLAYER_VY;
+		move_object(player, 0.0f, PLAYER_VY);
 		do_player_animation = 1;
 	}
 	if (game.camera_x > game.camera_max_x)
