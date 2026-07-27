@@ -476,11 +476,20 @@ static void sample_collision_mask(float wx, float wy, union vec3 *color)
 
 	int col = (int) wx;
 	int row = (int) wy;
-	uint8_t *pixel = (unsigned char *) &level[0].collision_mask[img].data[4 * row * 1024 + col];
+	uint8_t *pixel = (unsigned char *) &level[0].collision_mask[img].data[4 * (row * 1024 + col)];
 
 	color->r = (float) pixel[0] / 255.0;
 	color->g = (float) pixel[1] / 255.0;
 	color->b = (float) pixel[2] / 255.0;
+}
+
+static void sample_mask_around_object(struct game_object *o, union vec3 *colors)
+{
+	for (int i = 0; i < 4; i++) {
+		int wx = (int) (o->x + xo[i] * 10);
+		int wy = (int) (o->y + yo[i] * 10);
+		sample_collision_mask(wx, wy, &colors[i]);
+	}
 }
 
 static void move_object(struct game_object *o, float dx, float dy)
@@ -655,16 +664,23 @@ static void draw_level(SDL_Renderer *renderer)
 	/* printf("--- End draw_level() ---\n"); */
 }
 
-static void draw_debug_rectangles(struct game_object *o)
+static void draw_debug_rectangles(struct game_object *o, union vec3 *v)
 {
 	if (!debug_rects_on)
 		return;
 
-	SDL_SetRenderDrawColor(game.renderer, 255, 0, 0, 255);
 
 	for (int i = 0; i < 4; i++) {
 		float x = world_to_screenx(o->x) + xo[i] * 20.0f;
 		float y = world_to_screeny(o->y) + yo[i] * 20.0f;
+
+		uint8_t r, g, b;
+
+		r = (uint8_t) v[i].r * 255;
+		g = (uint8_t) v[i].g * 255;
+		b = (uint8_t) v[i].b * 255;
+
+		SDL_SetRenderDrawColor(game.renderer, r, g, b, 255);
 		draw_rectangle(game.renderer, x, y, 10.0f, 10.0f, 1);
 	}
 }
@@ -672,6 +688,7 @@ static void draw_debug_rectangles(struct game_object *o)
 /* Render graphics to the screen */
 void render(struct game_state *game)
 {
+	
 	/* Set draw color to dark gray / black background and clear screen */
 	SDL_SetRenderDrawColor(game->renderer, 30, 30, 30, 255);
 	SDL_RenderClear(game->renderer);
@@ -682,7 +699,9 @@ void render(struct game_state *game)
 		goto done;
 	draw_level(game->renderer);
 	object_type[go[0].type].draw(game->renderer, &go[0]);
-	draw_debug_rectangles(player);
+	union vec3 colors[4];
+	sample_mask_around_object(&go[0], colors);
+	draw_debug_rectangles(player, colors);
 
 done:
 	/* Present the back buffer to the screen */
