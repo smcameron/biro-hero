@@ -99,6 +99,11 @@ enum keyaction {
 
 static int keypressed[6] = { 0 }; /* indexed by enum keyaction */
 
+static const float xo[] = { 0, 1, 0, -1 };
+static const float yo[] = { -1, 0, 1, 0 };
+
+static int debug_rects_on = 0;
+
 static void draw_rectangle(SDL_Renderer *renderer,
 	float x, float y, float w, float h, int filled)
 {
@@ -384,6 +389,11 @@ static void process_keydown(__attribute__((unused)) SDL_Event event)
 	case SDLK_s:
 		keypressed[keydown] = 1;
 		break;
+	case SDLK_r:
+		debug_rects_on = !debug_rects_on;
+		break;
+	default:
+		break;
 	}
 }
 
@@ -605,6 +615,20 @@ static void draw_level(SDL_Renderer *renderer)
 	/* printf("--- End draw_level() ---\n"); */
 }
 
+static void draw_debug_rectangles(struct game_object *o)
+{
+	if (!debug_rects_on)
+		return;
+
+	SDL_SetRenderDrawColor(game.renderer, 255, 0, 0, 255);
+
+	for (int i = 0; i < 4; i++) {
+		float x = world_to_screenx(o->x) + xo[i] * 20.0f;
+		float y = world_to_screeny(o->y) + yo[i] * 20.0f;
+		draw_rectangle(game.renderer, x, y, 10.0f, 10.0f, 1);
+	}
+}
+
 /* Render graphics to the screen */
 void render(struct game_state *game)
 {
@@ -618,6 +642,7 @@ void render(struct game_state *game)
 		goto done;
 	draw_level(game->renderer);
 	object_type[go[0].type].draw(game->renderer, &go[0]);
+	draw_debug_rectangles(player);
 
 done:
 	/* Present the back buffer to the screen */
