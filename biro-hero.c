@@ -435,6 +435,9 @@ static void process_keydown(__attribute__((unused)) SDL_Event event)
 	case SDLK_s:
 		keypressed[keydown] = 1;
 		break;
+	case SDLK_SPACE:
+		keypressed[keyjump] = 1;
+		break;
 	case SDLK_r:
 		debug_rects_on = !debug_rects_on;
 		break;
@@ -461,6 +464,11 @@ static void process_keyup(__attribute__((unused)) SDL_Event event)
 	case SDLK_DOWN:
 	case SDLK_s:
 		keypressed[keydown] = 0;
+		break;
+	case SDLK_SPACE:
+		keypressed[keyjump] = 0;
+		break;
+	default:
 		break;
 	}
 }
@@ -541,7 +549,7 @@ static bool is_passable(float x, float y) {
 	return (d_red > 0.8f || d_green > 0.8f);
 }
 
-#define MAX_STEP_HEIGHT 5 /* Maximum pixels the player can step up at once */
+#define MAX_STEP_HEIGHT 20 /* Maximum pixels the player can step up at once */
 
 void move_horizontal(struct game_object *o, float dx)
 {
