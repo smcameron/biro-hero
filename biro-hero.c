@@ -81,6 +81,7 @@ static struct game_object *player;
 #define OBJTYPE_BARREL 9
 #define OBJTYPE_TNT 10
 #define OBJTYPE_AMMO 11
+#define OBJTYPE_FLAG 12
 
 static struct object_type_data {
 	struct image **image;
@@ -128,6 +129,7 @@ struct image ammo = { "images/ammo.png", NULL, 0, 0, 0, 0, NULL, };
 struct image hero_ladder_1 = { "images/hero-ladder-1.png", NULL, 0, 0, 0, 0, NULL, };
 struct image hero_ladder_2 = { "images/hero-ladder-2.png", NULL, 0, 0, 0, 0, NULL, };
 struct image hero_ladder_3 = { "images/hero-ladder-3.png", NULL, 0, 0, 0, 0, NULL, };
+struct image russflag = { "images/flag.png", NULL, 0, 0, 0, 0, NULL, };
 
 static struct static_object_entry {
 	int level;
@@ -172,6 +174,10 @@ static struct static_object_entry {
 	{ 0, 3918.0f, 258.0f, OBJTYPE_SOLDIER, },
 	{ 0, 2730.0f, 182.0f, OBJTYPE_SOLDIER, },
 	{ 0, 2922.0f, 144.0f, OBJTYPE_SOLDIER, },
+	{ 0, 494.0f, 600.0f, OBJTYPE_FLAG, },
+	{ 0, 2548.0f, 608.0f, OBJTYPE_FLAG, },
+	{ 0, 3952.0f, 540.0f, OBJTYPE_FLAG, },
+	{ 0, 2112.0f, 718.0f, OBJTYPE_BARREL, },
 };
 
 enum keyaction {
@@ -302,6 +308,7 @@ static int read_png_files(SDL_Renderer *renderer)
 	x += load_png_image(renderer, &hero_ladder_1, IMAGE_MODE_TEXTURE);
 	x += load_png_image(renderer, &hero_ladder_2, IMAGE_MODE_TEXTURE);
 	x += load_png_image(renderer, &hero_ladder_3, IMAGE_MODE_TEXTURE);
+	x += load_png_image(renderer, &russflag, IMAGE_MODE_TEXTURE);
 	return x;
 }
 
@@ -598,6 +605,14 @@ static void set_up_object_type_data(void)
 	object_type[n].nimages = 1;
 	object_type[n].scalex = 0.13;
 	object_type[n].scaley = 0.13;
+	object_type[n].draw = draw_object;
+
+	n = OBJTYPE_FLAG;
+	object_type[n].image = malloc(1 * sizeof(*object_type[0].image));
+	object_type[n].image[0] = &russflag;
+	object_type[n].nimages = 1;
+	object_type[n].scalex = 0.35;
+	object_type[n].scaley = 0.35;
 	object_type[n].draw = draw_object;
 }
 
