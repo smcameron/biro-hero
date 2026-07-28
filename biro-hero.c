@@ -158,6 +158,13 @@ static struct static_object_entry {
 	{ 0, 772.0f, 472.0f, OBJTYPE_SOLDIER, },
 	{ 0, 510.0f, 714.0f, OBJTYPE_SOLDIER, },
 	{ 0, 228.0f, 687.0f, OBJTYPE_SOLDIER, },
+	{ 0, 650.0f, 343.0f, OBJTYPE_SOLDIER, },
+	{ 0, 1554.0f, 265.0f, OBJTYPE_SOLDIER, },
+	{ 0, 2048.0f, 204.0f, OBJTYPE_SOLDIER, },
+	{ 0, 2456.0f, 254.0f, OBJTYPE_SOLDIER, },
+	{ 0, 3918.0f, 258.0f, OBJTYPE_SOLDIER, },
+	{ 0, 2730.0f, 182.0f, OBJTYPE_SOLDIER, },
+	{ 0, 2922.0f, 144.0f, OBJTYPE_SOLDIER, },
 };
 
 enum keyaction {
