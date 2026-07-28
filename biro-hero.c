@@ -125,6 +125,9 @@ struct image soldier4 = { "images/soldier4.png", NULL, 0, 0, 0, 0, NULL, };
 struct image barrel = { "images/barrel.png", NULL, 0, 0, 0, 0, NULL, };
 struct image tnt = { "images/tnt.png", NULL, 0, 0, 0, 0, NULL, };
 struct image ammo = { "images/ammo.png", NULL, 0, 0, 0, 0, NULL, };
+struct image hero_ladder_1 = { "images/hero-ladder-1.png", NULL, 0, 0, 0, 0, NULL, };
+struct image hero_ladder_2 = { "images/hero-ladder-2.png", NULL, 0, 0, 0, 0, NULL, };
+struct image hero_ladder_3 = { "images/hero-ladder-3.png", NULL, 0, 0, 0, 0, NULL, };
 
 static struct static_object_entry {
 	int level;
@@ -296,6 +299,9 @@ static int read_png_files(SDL_Renderer *renderer)
 	x += load_png_image(renderer, &barrel, IMAGE_MODE_TEXTURE);
 	x += load_png_image(renderer, &ammo, IMAGE_MODE_TEXTURE);
 	x += load_png_image(renderer, &tnt, IMAGE_MODE_TEXTURE);
+	x += load_png_image(renderer, &hero_ladder_1, IMAGE_MODE_TEXTURE);
+	x += load_png_image(renderer, &hero_ladder_2, IMAGE_MODE_TEXTURE);
+	x += load_png_image(renderer, &hero_ladder_3, IMAGE_MODE_TEXTURE);
 	return x;
 }
 
@@ -484,14 +490,18 @@ static void set_up_object_type_data(void)
 {
 	/* Setup OBJTYPE_PLAYER data */
 	int n = OBJTYPE_PLAYER;
-	object_type[n].image = malloc(6 * sizeof(*object_type[0].image));
+	object_type[n].image = malloc(10 * sizeof(*object_type[0].image));
 	object_type[n].image[0] = &hero_right_1;
 	object_type[n].image[1] = &hero_right_2;
 	object_type[n].image[2] = &hero_right_3;
 	object_type[n].image[3] = &hero_left_1;
 	object_type[n].image[4] = &hero_left_2;
 	object_type[n].image[5] = &hero_left_3;
-	object_type[n].nimages = 6;
+	object_type[n].image[6] = &hero_ladder_1;
+	object_type[n].image[7] = &hero_ladder_2;
+	object_type[n].image[8] = &hero_ladder_3;
+	object_type[n].image[9] = &hero_ladder_2; /* hero_ladder_2 is deliberately repeated here. */
+	object_type[n].nimages = 10;
 	object_type[n].scalex = 0.25;
 	object_type[n].scaley = 0.25;
 	object_type[n].draw = draw_object;
@@ -1067,11 +1077,29 @@ void update(float delta_time)
 	if (do_player_animation) {
 		if (player->ticks > player->next_animation_tick) {
 			player->next_animation_tick = player->ticks + 0.1;
-			player->current_image++;
-			if (player->current_image == 3)
-				player->current_image = 0;
-			if (player->current_image == 6)
-				player->current_image = 3;
+			if (player->is_climbing) {
+				/* Ladder animation sequence: 6,7,8,9, repeating (7 and 9 are the same image) */
+				if (player->current_image < 6 || player->current_image > 9) {
+					player->current_image = 6;
+				} else {
+					player->current_image++;
+					if (player->current_image > 9)
+						player->current_image = 6;
+				}
+			} else {
+				player->current_image++;
+				if (player->current_image > 6) { /* we were climbing, but no more */
+					if (player->vx >= 0)
+						player->current_image = 0;
+					else
+						player->current_image = 3;
+				} else {
+					if (player->current_image == 3)
+						player->current_image = 0;
+					if (player->current_image == 6)
+						player->current_image = 3;
+				}
+			}
 		}
 	}
 	move_objects(delta_time);
