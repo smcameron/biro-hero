@@ -53,6 +53,8 @@ static struct game_object {
 	int i;			/* index into go[] */
 	float x, y;		/* position in world coords */
 	float sx, sy;		/* position in screen coords */
+	float vx, vy;		/* for "physics" */
+	int is_grounded;	/* Is the object touching the floor? */
 	int current_image;	/* index into object_type[o->type].image[]; */
 	float ticks;
 	float next_animation_tick;
@@ -294,6 +296,9 @@ static void player_init(void)
 	player->type = OBJTYPE_PLAYER;
 	player->ticks = 0.0;
 	player->next_animation_tick = 0.0;
+	player->is_grounded = 0;
+	player->vx = 0.0f;
+	player->vy = 0.0f;
 }
 
 /* Functions to convert from world coords to screen coords */
@@ -523,47 +528,100 @@ static void sample_mask_around_object(struct game_object *o, union vec3 *colors)
 	}
 }
 
-static void move_object(struct game_object *o, int direction, float dist)
+/* Helper function to check if a specific pixel is passable (green or red),
+ * x and y are world coords.
+ */
+static bool is_passable(float x, float y) {
+	union vec3 color;
+	sample_collision_mask(x, y, &color);
+
+	float d_red = vec3_dot(&RED, &color);
+	float d_green = vec3_dot(&GREEN, &color);
+
+	return (d_red > 0.8f || d_green > 0.8f);
+}
+
+#define MAX_STEP_HEIGHT 5 /* Maximum pixels the player can step up at once */
+
+void move_horizontal(struct game_object *o, float dx)
 {
-	float newx, newy;
-
-	newx = o->x + xo[direction] * dist;
-	newy = o->y + yo[direction] * dist;
-
-	/* Keep things in bounds */
-	if (newx < 10.0)
-		newx = 10.0;
-	if (newx > (level[0].nscreens * 1024.0f - 10.0))
-		newx = level[0].nscreens * 1024.0f - 10.0;
-	if (newy < 10.0f)
-		newy = 10.0f;
-	if (newy > 750.0f)
-		newy = 750.0f;
-
-	/* Check if there are walls that prevent us from moving there... */
+	/* Determine the leading edge based on sprite width */
 	struct object_type_data *odt = &object_type[o->type];
-	struct image *im = odt->image[0];
-	int imw = im->width * odt->scalex;
-	int imh = im->height * odt->scaley;
-	union vec3 color, red, green;
+	float half_width = (odt->image[0]->width * odt->scalex) / 2.0f;
+	float half_height = (odt->image[0]->height * odt->scaley) / 2.0f;
 
-	float samplex = newx + xo[direction] * imw * 0.5;
-	float sampley = newy + yo[direction] * imh * 0.5;
-	sample_collision_mask(samplex, sampley, &color);
-	red = RED;
-	green = GREEN;
+	float target_x = o->x + dx;
+	float leading_x = dx > 0 ? target_x + half_width : target_x - half_width;
+	float foot_y = o->y + half_height;
 
-	/* Dot product to see if the colors are in the ballpark.
-	 * I don't know how to get Gimp to let me paint with pure colors.
-	 * It's blending things a bit at the edges, so we can't check for
-	 * an exact color match.
-	 */
-	float d1 = vec3_dot(&red, &color);
-	float d2 = vec3_dot(&green, &color);
+	/* If the target space at foot level is blocked... */
+	if (!is_passable(leading_x, foot_y)) {
+		bool stepped_up = false;
 
-	if (d1 > 0.8 || d2 > 0.8) { /* in the ballpark of red or green? */
-		o->x = newx;
-		o->y = newy;
+		/* Look upward pixel by pixel to find a valid step */
+		for (int step = 1; step <= MAX_STEP_HEIGHT; step++) {
+			if (is_passable(leading_x, foot_y - step)) {
+				/* We found an opening! Adjust Y to walk up the slope. */
+				o->y -= step;
+				stepped_up = true;
+				break;
+			}
+		}
+
+		/* If a step wasn't found, it's a wall. Stop horizontal movement. */
+		if (!stepped_up) {
+			o->vx = 0;
+			return;
+		}
+	}
+
+	/* If passable or successfully stepped up, apply the X movement */
+	o->x = target_x;
+}
+
+#define GRAVITY 15.0f
+#define MAX_FALL_SPEED 10.0f
+#define SNAP_TO_GROUND_DIST 3 /* Pixels to look down to stay attached to a slope */
+
+void apply_gravity_and_vertical_movement(struct game_object *o, float delta_time)
+{
+	struct object_type_data *odt = &object_type[o->type];
+	float half_height = (odt->image[0]->height * odt->scaley) / 2.0f;
+
+	/* Apply Gravity */
+	o->vy += GRAVITY * delta_time;
+	if (o->vy > MAX_FALL_SPEED) o->vy = MAX_FALL_SPEED;
+
+	float target_y = o->y + o->vy;
+	float foot_y = target_y + half_height;
+
+	if (o->vy > 0 && !is_passable(o->x, foot_y)) {
+		/* 1. Check for floor collision (falling) */
+		/* Hit the ground. Align exactly with the floor pixel. */
+		while (!is_passable(o->x, foot_y)) {
+			foot_y -= 1.0f;
+		}
+		o->y = foot_y - half_height;
+		o->vy = 0;
+		o->is_grounded = true;
+	} else if (o->is_grounded && o->vy >= 0) {
+		/* 2. Slope adhesion (sticking to downward slopes) */
+		bool found_ground = false;
+		for (int i = 1; i <= SNAP_TO_GROUND_DIST; i++) {
+			if (!is_passable(o->x, foot_y + i)) {
+				/* Ground is just a few pixels below, snap down to it */
+				o->y += (i - 1);
+				found_ground = true;
+				break;
+			}
+		}
+		if (!found_ground) {
+			o->is_grounded = false; /* Walked off a ledge */
+		}
+	} else {
+		/* 3. Free falling or moving up */
+		o->y = target_y;
+		o->is_grounded = false;
 	}
 }
 
@@ -571,30 +629,39 @@ static void move_object(struct game_object *o, int direction, float dist)
 void update(float delta_time)
 {
 	int do_player_animation = 0;
-	/* TODO: Add game logic updates here */
+
 #define PLAYER_VX 2
 #define PLAYER_VY 2
-	if (keypressed[keyleft]) {
-		move_object(player, WEST, PLAYER_VX);
-		if (player->current_image <= 2 || player->current_image >= 6)
-			player->current_image = 3;  /* Make player face left */
 
+	/* Input sets velocity, not direct position */
+	player->vx = 0;
+	if (keypressed[keyleft]) {
+		player->vx = -PLAYER_VX;
 		do_player_animation = 1;
 	}
 	if (keypressed[keyright]) {
-		if (player->current_image >= 3)
-			player->current_image = 0;  /* Make player face right */
-		move_object(player, EAST, PLAYER_VX);
+		player->vx =  PLAYER_VX;
 		do_player_animation = 1;
 	}
-	if (keypressed[keyup]) {
-		move_object(player, NORTH, PLAYER_VY);
+	if (keypressed[keyjump] && player->is_grounded) {
+		player->vy = -5.0f; /* Jump velocity */
+		player->is_grounded = false;
 		do_player_animation = 1;
 	}
-	if (keypressed[keydown]) {
-		move_object(player, SOUTH, PLAYER_VY);
-		do_player_animation = 1;
+
+	/* Apply movement */
+	if (player->vx != 0.0f) {
+
+		/* Turn player around if he is facing the wrong direction */
+		if (player->vx < 0.0f && player->current_image >= 0 && player->current_image <= 2)
+			player->current_image = 3;
+		else if (player->vx > 0.0f && player->current_image >= 3 && player->current_image <= 5)
+			player->current_image = 0;
+
+		move_horizontal(player, player->vx);
 	}
+	apply_gravity_and_vertical_movement(player, delta_time);
+
 	if (game.camera_x > game.camera_max_x)
 			game.camera_x = game.camera_max_x;
 	if (game.camera_x < game.camera_min_x)
