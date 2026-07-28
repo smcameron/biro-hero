@@ -48,6 +48,10 @@ struct image {
 	SDL_Texture *texture;
 };
 
+#define PLAYER_VX 2
+#define PLAYER_VY 2
+#define SOLDIER_VX 2.1
+#define SOLDIER_VY 2.1
 #define MAX_GAME_OBJS 1000
 
 static struct game_object {
@@ -881,13 +885,53 @@ void apply_gravity_and_vertical_movement(struct game_object *o, float delta_time
 	}
 }
 
+static void move_soldier(struct game_object *o, float delta_time)
+{
+	if (o->vx == 0.0f) {
+		/* Choose a random direction on the first update */
+		static uint32_t seed = 0xDEADBEEF;
+		o->vx = ((xorshift(&seed) % 2) == 0) ? SOLDIER_VX : -SOLDIER_VX;
+	}
+
+	float intended_vx = o->vx;
+	move_horizontal(o, o->vx);
+	if (o->vx == 0.0f) /* Turn around if an obstacle was hit */
+		o->vx = -intended_vx;
+
+	apply_gravity_and_vertical_movement(o, delta_time);
+
+	o->ticks += delta_time;
+	if (o->ticks > o->next_animation_tick) { /* do animation */
+		o->next_animation_tick = o->ticks + 0.15f;
+
+		if (o->vx > 0.0f)
+			o->current_image = (o->current_image == 0) ? 1 : 0;
+		else
+			o->current_image = (o->current_image == 2) ? 3 : 2;
+	}
+}
+
+static void move_objects(float delta_time)
+{
+	for (int i = 0; i <= snis_object_pool_highest_object(game.objpool); i++) {
+		if (!snis_object_pool_is_allocated(game.objpool, i))
+			continue;
+		struct game_object *o = &go[i];
+		switch (o->type) {
+		case OBJTYPE_SOLDIER:
+			move_soldier(o, delta_time);
+			break;
+		default:
+			break;
+		}
+	}
+}
+
 /* Update game logic (positions, physics, AI) based on delta time */
 void update(float delta_time)
 {
 	int do_player_animation = 0;
 
-#define PLAYER_VX 2
-#define PLAYER_VY 2
 
 	/* Input sets velocity, not direct position */
 	player->vx = 0;
@@ -974,6 +1018,7 @@ void update(float delta_time)
 				player->current_image = 3;
 		}
 	}
+	move_objects(delta_time);
 }
 
 static void draw_background_image(SDL_Renderer *renderer)
