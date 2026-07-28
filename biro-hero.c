@@ -461,8 +461,12 @@ static void draw_object(SDL_Renderer *renderer, struct game_object *o)
 		world_to_screeny(o->y - 0.5 * h),
 		w, h };
 
+	/* Define the clipping region: 100px from left and right edges */
+	SDL_Rect clip_rect = { 100, 0, game.window_width - 200, game.window_height };
+	SDL_RenderSetClipRect(renderer, &clip_rect); /* Apply the clipping rectangle */
 	SDL_SetTextureBlendMode(im[i]->texture, SDL_BLENDMODE_MOD);
 	SDL_RenderCopy(renderer, im[i]->texture, NULL, &destrect);
+	SDL_RenderSetClipRect(renderer, NULL); /* Remove the clipping rectangle */
 }
 
 static void set_up_object_type_data(void)
