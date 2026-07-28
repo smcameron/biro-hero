@@ -73,6 +73,10 @@ static struct game_object *player;
 #define OBJTYPE_BED 5
 #define OBJTYPE_CRATES 6
 #define OBJTYPE_DIRTCLOD 7
+#define OBJTYPE_SOLDIER 8
+#define OBJTYPE_BARREL 9
+#define OBJTYPE_TNT 10
+#define OBJTYPE_AMMO 11
 
 static struct object_type_data {
 	struct image **image;
@@ -110,6 +114,13 @@ struct image dirtclod1 = { "images/dirtclod1.png", NULL, 0, 0, 0, 0, NULL, };
 struct image dirtclod2 = { "images/dirtclod2.png", NULL, 0, 0, 0, 0, NULL, };
 struct image dirtclod3 = { "images/dirtclod3.png", NULL, 0, 0, 0, 0, NULL, };
 struct image dirtclod4 = { "images/dirtclod4.png", NULL, 0, 0, 0, 0, NULL, };
+struct image soldier1 = { "images/soldier1.png", NULL, 0, 0, 0, 0, NULL, };
+struct image soldier2 = { "images/soldier2.png", NULL, 0, 0, 0, 0, NULL, };
+struct image soldier3 = { "images/soldier3.png", NULL, 0, 0, 0, 0, NULL, };
+struct image soldier4 = { "images/soldier4.png", NULL, 0, 0, 0, 0, NULL, };
+struct image barrel = { "images/barrel.png", NULL, 0, 0, 0, 0, NULL, };
+struct image tnt = { "images/tnt.png", NULL, 0, 0, 0, 0, NULL, };
+struct image ammo = { "images/ammo.png", NULL, 0, 0, 0, 0, NULL, };
 
 static struct static_object_entry {
 	int level;
@@ -124,6 +135,29 @@ static struct static_object_entry {
 	{ 0, 1600.0f, 385.0f, OBJTYPE_CRATES, },
 	{ 0, 1630.0f, 600.0f, OBJTYPE_DESK, },
 	{ 0, 2250.0f, 695.0f, OBJTYPE_RADAR_CONSOLE, },
+	{ 0, 1162.0f, 627.0f, OBJTYPE_BED, },
+	{ 0, 1848.0f, 586.0f, OBJTYPE_BED, },
+	{ 0, 2286.0f, 400.0f, OBJTYPE_CRATES, },
+	{ 0, 2604.0f, 400.0f, OBJTYPE_CRATES, },
+	{ 0, 2550.0f, 685.0f, OBJTYPE_DESK, },
+	{ 0, 2850.0f, 670.0f, OBJTYPE_SHELLS, },
+	{ 0, 3226.0f, 326.0f, OBJTYPE_BARREL, },
+	{ 0, 3286.0f, 326.0f, OBJTYPE_AMMO, },
+	{ 0, 3286.0f, 618.0f, OBJTYPE_TNT, },
+	{ 0, 3246.0f, 618.0f, OBJTYPE_SOLDIER, },
+	{ 0, 3660.0f, 424.0f, OBJTYPE_SOLDIER, },
+	{ 0, 3950.0f, 632.0f, OBJTYPE_SOLDIER, },
+	{ 0, 3950.0f, 612.0f, OBJTYPE_RADAR_CONSOLE, },
+	{ 0, 2536.0f, 429.0f, OBJTYPE_SOLDIER, },
+	{ 0, 2222.0f, 429.0f, OBJTYPE_SOLDIER, },
+	{ 0, 2118.0f, 718.0f, OBJTYPE_SOLDIER, },
+	{ 0, 1652.0f, 418.0f, OBJTYPE_SOLDIER, },
+	{ 0, 1372.0f, 472.0f, OBJTYPE_SOLDIER, },
+	{ 0, 1222.0f, 636.0f, OBJTYPE_SOLDIER, },
+	{ 0, 1132.0f, 381.0f, OBJTYPE_SOLDIER, },
+	{ 0, 772.0f, 472.0f, OBJTYPE_SOLDIER, },
+	{ 0, 510.0f, 714.0f, OBJTYPE_SOLDIER, },
+	{ 0, 228.0f, 687.0f, OBJTYPE_SOLDIER, },
 };
 
 enum keyaction {
@@ -244,6 +278,13 @@ static int read_png_files(SDL_Renderer *renderer)
 	x += load_png_image(renderer, &dirtclod2, IMAGE_MODE_TEXTURE);
 	x += load_png_image(renderer, &dirtclod3, IMAGE_MODE_TEXTURE);
 	x += load_png_image(renderer, &dirtclod4, IMAGE_MODE_TEXTURE);
+	x += load_png_image(renderer, &soldier1, IMAGE_MODE_TEXTURE);
+	x += load_png_image(renderer, &soldier2, IMAGE_MODE_TEXTURE);
+	x += load_png_image(renderer, &soldier3, IMAGE_MODE_TEXTURE);
+	x += load_png_image(renderer, &soldier4, IMAGE_MODE_TEXTURE);
+	x += load_png_image(renderer, &barrel, IMAGE_MODE_TEXTURE);
+	x += load_png_image(renderer, &ammo, IMAGE_MODE_TEXTURE);
+	x += load_png_image(renderer, &tnt, IMAGE_MODE_TEXTURE);
 	return x;
 }
 
@@ -497,6 +538,41 @@ static void set_up_object_type_data(void)
 	object_type[n].nimages = 4;
 	object_type[n].scalex = 0.3;
 	object_type[n].scaley = 0.3;
+	object_type[n].draw = draw_object;
+
+	n = OBJTYPE_SOLDIER;
+	object_type[n].image = malloc(4 * sizeof(*object_type[0].image));
+	object_type[n].image[0] = &soldier1;
+	object_type[n].image[1] = &soldier2;
+	object_type[n].image[2] = &soldier3;
+	object_type[n].image[3] = &soldier4;
+	object_type[n].nimages = 4;
+	object_type[n].scalex = 0.18;
+	object_type[n].scaley = 0.18;
+	object_type[n].draw = draw_object;
+
+	n = OBJTYPE_BARREL;
+	object_type[n].image = malloc(1 * sizeof(*object_type[0].image));
+	object_type[n].image[0] = &barrel;
+	object_type[n].nimages = 1;
+	object_type[n].scalex = 0.18;
+	object_type[n].scaley = 0.18;
+	object_type[n].draw = draw_object;
+
+	n = OBJTYPE_TNT;
+	object_type[n].image = malloc(1 * sizeof(*object_type[0].image));
+	object_type[n].image[0] = &tnt;
+	object_type[n].nimages = 1;
+	object_type[n].scalex = 0.18;
+	object_type[n].scaley = 0.18;
+	object_type[n].draw = draw_object;
+
+	n = OBJTYPE_AMMO;
+	object_type[n].image = malloc(1 * sizeof(*object_type[0].image));
+	object_type[n].image[0] = &ammo;
+	object_type[n].nimages = 1;
+	object_type[n].scalex = 0.13;
+	object_type[n].scaley = 0.13;
 	object_type[n].draw = draw_object;
 }
 
