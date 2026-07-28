@@ -1,6 +1,6 @@
 
 incoming-artillery.ogg
-Incoming Artillery Strike Cinematic Explosion by EvanBoyerman 
+Incoming Artillery Strike Cinematic Explosion by EvanBoyerman
 https://freesound.org/s/530886/ -- License: Attribution 3.0
 
 distant-artillery1.ogg
@@ -15,4 +15,8 @@ https://freesound.org/s/834247/ -- License: Creative Commons 0
 rifle-burst-fire.ogg
 Rifle Burstfire 1 by TB0Y298
 https://freesound.org/s/718948/ -- License: Attribution 4.0
+
+ar15-shot.ogg
+AR15 Indoors (open windows) by modusmogulus
+https://freesound.org/s/815698/ -- License: Creative Commons 0
 

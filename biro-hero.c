@@ -65,6 +65,8 @@ static struct game_object {
 	int current_image;	/* index into object_type[o->type].image[]; */
 	float ticks;
 	float next_animation_tick;
+	int shooting;
+	uint32_t last_shot_time;
 } go[MAX_GAME_OBJS];
 
 static struct game_object *player;
@@ -191,7 +193,7 @@ enum keyaction {
 	keygrenade,
 };
 
-static int keypressed[6] = { 0 }; /* indexed by enum keyaction */
+static int keypressed[7] = { 0 }; /* indexed by enum keyaction */
 
 #define NORTH 0
 #define EAST 1
@@ -210,6 +212,7 @@ const union vec3 GREEN = { { 0.0f, 1.0f, 0.0f } };
 #define INCOMING_ARTILLERY 2
 #define LIGHT_MACHINE_GUN 3
 #define RIFLE_BURST_FIRE 4
+#define AR15_SHOT 5
 
 /* George Marsaglia's xorshift PRNG algorithm,
  * see: https://en.wikipedia.org/wiki/Xorshift#Example_implementation
@@ -410,6 +413,7 @@ static void player_init(void)
 	player->is_climbing = 0;
 	player->vx = 0.0f;
 	player->vy = 0.0f;
+	player->shooting = 0;
 }
 
 static void set_up_level(int l)
@@ -685,6 +689,9 @@ static void process_keydown(__attribute__((unused)) SDL_Event event)
 	case SDLK_SPACE:
 		keypressed[keyjump] = 1;
 		break;
+	case SDLK_z:
+		keypressed[keyshoot] = 1;
+		break;
 	case SDLK_r:
 		debug_rects_on = !debug_rects_on;
 		break;
@@ -717,6 +724,9 @@ static void process_keyup(__attribute__((unused)) SDL_Event event)
 		break;
 	case SDLK_SPACE:
 		keypressed[keyjump] = 0;
+		break;
+	case SDLK_z:
+		keypressed[keyshoot] = 0;
 		break;
 	default:
 		break;
@@ -1008,6 +1018,18 @@ static void move_objects(float delta_time)
 	}
 }
 
+static void player_shoot(struct game_object *o)
+{
+	if (player->is_climbing) /* can't shoot from ladder */
+		return;
+	uint32_t now = SDL_GetTicks();
+	if (now - player->last_shot_time < 100) /* throttle shots to 10 / sec */
+		return;
+	player->last_shot_time = now;
+	wwviaudio_add_sound(AR15_SHOT);
+	player->shooting = 1;
+}
+
 /* Update game logic (positions, physics, AI) based on delta time */
 void update(float delta_time)
 {
@@ -1028,6 +1050,9 @@ void update(float delta_time)
 		player->vy = -5.0f; /* Jump velocity */
 		player->is_grounded = false;
 		do_player_animation = 1;
+	}
+	if (keypressed[keyshoot]) {
+		player_shoot(player);
 	}
 
 	/* Check if the player's center is over a ladder */
@@ -1116,6 +1141,10 @@ void update(float delta_time)
 				}
 			}
 		}
+	}
+	if (player->shooting) {
+		player->shooting = 0;
+		/* TODO: add muzzle flash and do some ray casting */
 	}
 	move_objects(delta_time);
 }
@@ -1350,6 +1379,7 @@ static void setup_audio_system(void)
 	wwviaudio_read_ogg_clip(INCOMING_ARTILLERY, "sounds/incoming-artillery.ogg");
 	wwviaudio_read_ogg_clip(LIGHT_MACHINE_GUN, "sounds/light-machine-gun.ogg");
 	wwviaudio_read_ogg_clip(RIFLE_BURST_FIRE, "sounds/rifle-burst-fire.ogg");
+	wwviaudio_read_ogg_clip(AR15_SHOT, "sounds/ar15-shot.ogg");
 }
 
 static void maybe_play_ambient_sounds(Uint32 now)
