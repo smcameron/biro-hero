@@ -12,6 +12,8 @@
 #include "wwviaudio.h"
 #include "ogg_to_pcm.h"
 
+#define ARRAYSIZE(x) (int) (sizeof(x) / sizeof((x)[0]))
+
 #define WINDOW_WIDTH (1024 * 1.2)
 #define WINDOW_HEIGHT (768 * 1.2)
 #define TARGET_FPS 60
@@ -64,6 +66,10 @@ static struct game_object {
 static struct game_object *player;
 #define MAX_OBJECT_TYPES 50
 #define OBJTYPE_PLAYER 0
+#define OBJTYPE_WALLMAP 1
+#define OBJTYPE_DESK 2
+#define OBJTYPE_SHELLS 3
+#define OBJTYPE_RADAR_CONSOLE 4
 
 static struct object_type_data {
 	struct image **image;
@@ -91,6 +97,21 @@ struct image hero_right_3 = { "images/hero-right-3.png", NULL, 0, 0, 0, 0, NULL,
 struct image hero_left_1 = { "images/hero-left-1.png", NULL, 0, 0, 0, 0, NULL, };
 struct image hero_left_2 = { "images/hero-left-2.png", NULL, 0, 0, 0, 0, NULL, };
 struct image hero_left_3 = { "images/hero-left-3.png", NULL, 0, 0, 0, 0, NULL, };
+struct image wallmap = { "images/map.png", NULL, 0, 0, 0, 0, NULL, };
+struct image radar_console = { "images/radar-console.png", NULL, 0, 0, 0, 0, NULL, };
+struct image desk = { "images/desk.png", NULL, 0, 0, 0, 0, NULL, };
+struct image artillery_shells = { "images/artillery-shells.png", NULL, 0, 0, 0, 0, NULL, };
+
+static struct static_object_entry {
+	int level;
+	float x, y;
+	int type;
+} static_object[] = {
+	{ 0, 450.0f, 700.0f, OBJTYPE_RADAR_CONSOLE, },
+	{ 0, 150.0f, 590.0f, OBJTYPE_WALLMAP, },
+	{ 0, 130.0f, 685.0f, OBJTYPE_DESK, },
+	{ 0, 700.0f, 500.0f, OBJTYPE_SHELLS, },
+};
 
 enum keyaction {
 	keyright,
@@ -200,6 +221,10 @@ static int read_png_files(SDL_Renderer *renderer)
 	x += load_png_image(renderer, &hero_left_1, IMAGE_MODE_TEXTURE);
 	x += load_png_image(renderer, &hero_left_2, IMAGE_MODE_TEXTURE);
 	x += load_png_image(renderer, &hero_left_3, IMAGE_MODE_TEXTURE);
+	x += load_png_image(renderer, &wallmap, IMAGE_MODE_TEXTURE);
+	x += load_png_image(renderer, &desk, IMAGE_MODE_TEXTURE);
+	x += load_png_image(renderer, &radar_console, IMAGE_MODE_TEXTURE);
+	x += load_png_image(renderer, &artillery_shells, IMAGE_MODE_TEXTURE);
 	return x;
 }
 
@@ -303,6 +328,31 @@ static void player_init(void)
 	player->vy = 0.0f;
 }
 
+static void set_up_level(int l)
+{
+	for (int i = 0; i < ARRAYSIZE(static_object); i++) {
+		if (static_object[i].level != l)
+			continue;
+		printf("Allocating object (total %d)\n", ARRAYSIZE(static_object));
+		int n = snis_object_pool_alloc_obj(game.objpool);
+		if (n < 0) {
+			fprintf(stderr, "Out of objects at %s:%d\n", __FILE__, __LINE__);
+			abort();
+		}
+		struct game_object *o = &go[n];
+		o->i = n;
+		o->type = static_object[i].type;
+		o->x = static_object[i].x;
+		o->y = static_object[i].y;
+		o->vx = 0.0;
+		o->vy = 0.0;
+		o->ticks = 0.0;
+		o->is_grounded = 1;
+		o->is_climbing = 0;
+		o->next_animation_tick = 0.0;
+	}
+}
+
 /* Functions to convert from world coords to screen coords */
 static float world_to_screenx(float x)
 {
@@ -370,6 +420,38 @@ static void set_up_object_type_data(void)
 	object_type[n].scalex = 0.25;
 	object_type[n].scaley = 0.25;
 	object_type[n].draw = draw_object;
+
+	n = OBJTYPE_WALLMAP;
+	object_type[n].image = malloc(1 * sizeof(*object_type[0].image));
+	object_type[n].image[0] = &wallmap;
+	object_type[n].nimages = 1;
+	object_type[n].scalex = 0.18;
+	object_type[n].scaley = 0.18;
+	object_type[n].draw = draw_object;
+
+	n = OBJTYPE_DESK;
+	object_type[n].image = malloc(1 * sizeof(*object_type[0].image));
+	object_type[n].image[0] = &desk;
+	object_type[n].nimages = 1;
+	object_type[n].scalex = 0.12;
+	object_type[n].scaley = 0.12;
+	object_type[n].draw = draw_object;
+
+	n = OBJTYPE_RADAR_CONSOLE;
+	object_type[n].image = malloc(1 * sizeof(*object_type[0].image));
+	object_type[n].image[0] = &radar_console;
+	object_type[n].nimages = 1;
+	object_type[n].scalex = 0.20;
+	object_type[n].scaley = 0.20;
+	object_type[n].draw = draw_object;
+
+	n = OBJTYPE_SHELLS;
+	object_type[n].image = malloc(1 * sizeof(*object_type[0].image));
+	object_type[n].image[0] = &artillery_shells;
+	object_type[n].nimages = 1;
+	object_type[n].scalex = 0.5;
+	object_type[n].scaley = 0.5;
+	object_type[n].draw = draw_object;
 }
 
 /* Initialize SDL, window, and renderer */
@@ -410,6 +492,7 @@ bool init_game(struct game_state *game)
 	game->camera_x = 1024.0 / 2.0;
 	snis_object_pool_setup(&game->objpool, MAX_GAME_OBJS);
 	player_init();
+	set_up_level(0);
 
 	return true;
 }
@@ -916,7 +999,14 @@ void render(struct game_state *game)
 	if (game->mode != GAME_MODE_PLAY)
 		goto done;
 	draw_level(game->renderer);
-	object_type[go[0].type].draw(game->renderer, &go[0]);
+
+	for (int i = 0; i < snis_object_pool_highest_object(game->objpool); i++) {
+		if (!snis_object_pool_is_allocated(game->objpool, i))
+			continue;
+		struct game_object *o = &go[i];
+		if (object_type[o->type].draw)
+			object_type[o->type].draw(game->renderer, o);
+	}
 	union vec3 colors[4];
 	sample_mask_around_object(&go[0], colors);
 	draw_debug_rectangles(player, colors);
