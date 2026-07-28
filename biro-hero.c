@@ -884,30 +884,83 @@ void apply_gravity_and_vertical_movement(struct game_object *o, float delta_time
 		o->is_grounded = false;
 	}
 }
-
 static void move_soldier(struct game_object *o, float delta_time)
 {
-	if (o->vx == 0.0f) {
-		/* Choose a random direction on the first update */
-		static uint32_t seed = 0xDEADBEEF;
-		o->vx = ((xorshift(&seed) % 2) == 0) ? SOLDIER_VX : -SOLDIER_VX;
+	/* 1. First frame initialization (only triggers when newly spawned) */
+	if (o->vx == 0.0f && o->vy == 0.0f && !o->is_climbing) {
+		static uint32_t init_seed = 0xDEADBEEF;
+		o->vx = ((xorshift(&init_seed) % 2) == 0) ? SOLDIER_VX : -SOLDIER_VX;
 	}
 
-	float intended_vx = o->vx;
-	move_horizontal(o, o->vx);
-	if (o->vx == 0.0f) /* Turn around if an obstacle was hit */
-		o->vx = -intended_vx;
+	/* Use the existing helper to check the color-coded mask */
+	bool on_ladder = is_ladder(o->x, o->y);
 
+	/* 2. Ladder AI Decision Making */
+	if (on_ladder && !o->is_climbing) {
+		/* Engage climbing mode. This prevents apply_gravity_and_vertical_movement
+		 * from pulling them down the ladder hole even if they pass by. */
+		o->is_climbing = 1;
+		o->vy = 0.0f;
+
+		if (o->vx == 0.0f) {
+			/* Case A: Reached the bottom of the ladder.
+			 * apply_gravity hit the floor and turned off is_climbing.
+			 * Pick a horizontal direction and walk away. */
+			static uint32_t walk_seed = 0x12345678;
+			o->vx = ((xorshift(&walk_seed) % 2) == 0) ? SOLDIER_VX : -SOLDIER_VX;
+		} else {
+			/* Case B: Walking horizontally and just encountered a ladder. Make a choice. */
+			static uint32_t choice_seed = 0x87654321;
+			int choice = xorshift(&choice_seed) % 3;
+
+			if (choice == 0) {
+				/* 1/3 Chance: Climb (Randomly choose up or down) */
+				o->vx = 0.0f;
+				o->vy = ((xorshift(&choice_seed) % 2) == 0) ? SOLDIER_VY : -SOLDIER_VY;
+			} else if (choice == 1) {
+				/* 1/3 Chance: Pass by */
+				/* Do nothing. vx remains untouched, and vy=0 acts as an invisible bridge */
+			} else {
+				/* 1/3 Chance: Turn around */
+				o->vx = -o->vx;
+			}
+		}
+	} else if (!on_ladder && o->is_climbing) {
+		/* Walked or climbed completely off the ladder */
+		o->is_climbing = 0;
+
+		if (o->vx == 0.0f) {
+			/* Climbed off the top or bottom while going vertically. Resume walking. */
+			static uint32_t end_ladder_seed = 0xABCDEF01;
+			o->vx = ((xorshift(&end_ladder_seed) % 2) == 0) ? SOLDIER_VX : -SOLDIER_VX;
+			o->vy = 0.0f;
+		}
+	}
+
+	/* 3. Execute Movement */
+	if (o->vx != 0.0f) {
+		float intended_vx = o->vx;
+		move_horizontal(o, o->vx);
+		if (o->vx == 0.0f) { /* Hit a wall, turn around */
+			o->vx = -intended_vx;
+		}
+	}
+
+	/* Execute vertical movement (gravity is skipped if is_climbing == 1) */
 	apply_gravity_and_vertical_movement(o, delta_time);
 
+	/* 4. Animation */
 	o->ticks += delta_time;
-	if (o->ticks > o->next_animation_tick) { /* do animation */
+	if (o->ticks > o->next_animation_tick) {
 		o->next_animation_tick = o->ticks + 0.15f;
-
-		if (o->vx > 0.0f)
+		if (o->vx > 0.0f) {
 			o->current_image = (o->current_image == 0) ? 1 : 0;
-		else
+		} else if (o->vx < 0.0f) {
 			o->current_image = (o->current_image == 2) ? 3 : 2;
+		} else {
+			/* Wiggle between frames while climbing */
+			o->current_image = (o->current_image == 0) ? 1 : 0;
+		}
 	}
 }
 
