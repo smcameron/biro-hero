@@ -572,6 +572,9 @@ static void process_keydown(__attribute__((unused)) SDL_Event event)
 	case SDLK_r:
 		debug_rects_on = !debug_rects_on;
 		break;
+	case SDLK_p:
+		printf("Player xy = (%g,%g)\n", player->x, player->y);
+		break;
 	default:
 		break;
 	}
