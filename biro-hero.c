@@ -55,6 +55,7 @@ static struct game_object {
 	float sx, sy;		/* position in screen coords */
 	float vx, vy;		/* for "physics" */
 	int is_grounded;	/* Is the object touching the floor? */
+	int is_climbing;	/* Is the object climbing a ladder */
 	int current_image;	/* index into object_type[o->type].image[]; */
 	float ticks;
 	float next_animation_tick;
@@ -297,6 +298,7 @@ static void player_init(void)
 	player->ticks = 0.0;
 	player->next_animation_tick = 0.0;
 	player->is_grounded = 0;
+	player->is_climbing = 0;
 	player->vx = 0.0f;
 	player->vy = 0.0f;
 }
@@ -549,6 +551,17 @@ static bool is_passable(float x, float y) {
 	return (d_red > 0.8f || d_green > 0.8f);
 }
 
+/* Helper function to check if a specific pixel is a ladder (red),
+ * x and y are world coords.
+ */
+static bool is_ladder(float x, float y) {
+	union vec3 color;
+	sample_collision_mask(x, y, &color);
+
+	/* Check strictly for the red channel */
+	return vec3_dot(&RED, &color) > 0.8f;
+}
+
 #define MAX_STEP_HEIGHT 20 /* Maximum pixels the player can step up at once */
 
 void move_horizontal(struct game_object *o, float dx)
@@ -595,6 +608,22 @@ void apply_gravity_and_vertical_movement(struct game_object *o, float delta_time
 {
 	struct object_type_data *odt = &object_type[o->type];
 	float half_height = (odt->image[0]->height * odt->scaley) / 2.0f;
+
+	/* If climbing, bypass gravity and apply direct vertical movement */
+	if (o->is_climbing) {
+		float target_y = o->y + o->vy;
+		float foot_y = target_y + half_height;
+
+		/* Ensure we aren't climbing down into solid ground */
+		if (is_passable(o->x, foot_y)) {
+			o->y = target_y;
+		} else {
+			/* Hit the ground while climbing down */
+			o->is_climbing = 0;
+			o->is_grounded = 1;
+		}
+		return;
+	}
 
 	/* Apply Gravity */
 	o->vy += GRAVITY * delta_time;
@@ -655,6 +684,46 @@ void update(float delta_time)
 		player->vy = -5.0f; /* Jump velocity */
 		player->is_grounded = false;
 		do_player_animation = 1;
+	}
+
+	/* Check if the player's center is over a ladder */
+	bool on_ladder = is_ladder(player->x, player->y);
+
+	/* Auto-grab the ladder if overlapping it and not moving upward (jumping) */
+	if (on_ladder && player->vy >= 0.0f)
+		player->is_climbing = 1;
+
+	/* Exit climbing state if they walk off the ladder */
+	if (!on_ladder) {
+		player->is_climbing = 0;
+	}
+
+	if (player->is_climbing) {
+		player->vy = 0.0f; /* Stop falling/floating */
+
+		if (keypressed[keyup]) {
+			player->vy = -PLAYER_VY;
+			do_player_animation = 1;
+		}
+		if (keypressed[keydown]) {
+			player->vy = PLAYER_VY;
+			do_player_animation = 1;
+		}
+
+		/* Allow jumping off the ladder */
+		if (keypressed[keyjump]) {
+			player->is_climbing = 0;
+			player->vy = -5.0f;
+			player->is_grounded = false;
+			do_player_animation = 1;
+		}
+	} else {
+		/* Standard jump logic when not climbing */
+		if (keypressed[keyjump] && player->is_grounded) {
+			player->vy = -5.0f; /* Jump velocity */
+			player->is_grounded = false;
+			do_player_animation = 1;
+		}
 	}
 
 	/* Apply movement */
@@ -838,7 +907,6 @@ static void debug_sampling(void)
 /* Render graphics to the screen */
 void render(struct game_state *game)
 {
-	
 	/* Set draw color to dark gray / black background and clear screen */
 	SDL_SetRenderDrawColor(game->renderer, 30, 30, 30, 255);
 	SDL_RenderClear(game->renderer);
