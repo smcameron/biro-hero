@@ -70,6 +70,9 @@ static struct game_object *player;
 #define OBJTYPE_DESK 2
 #define OBJTYPE_SHELLS 3
 #define OBJTYPE_RADAR_CONSOLE 4
+#define OBJTYPE_BED 5
+#define OBJTYPE_CRATES 6
+#define OBJTYPE_DIRTCLOD 7
 
 static struct object_type_data {
 	struct image **image;
@@ -101,6 +104,12 @@ struct image wallmap = { "images/map.png", NULL, 0, 0, 0, 0, NULL, };
 struct image radar_console = { "images/radar-console.png", NULL, 0, 0, 0, 0, NULL, };
 struct image desk = { "images/desk.png", NULL, 0, 0, 0, 0, NULL, };
 struct image artillery_shells = { "images/artillery-shells.png", NULL, 0, 0, 0, 0, NULL, };
+struct image bed = { "images/bed.png", NULL, 0, 0, 0, 0, NULL, };
+struct image crates = { "images/crates.png", NULL, 0, 0, 0, 0, NULL, };
+struct image dirtclod1 = { "images/dirtclod1.png", NULL, 0, 0, 0, 0, NULL, };
+struct image dirtclod2 = { "images/dirtclod2.png", NULL, 0, 0, 0, 0, NULL, };
+struct image dirtclod3 = { "images/dirtclod3.png", NULL, 0, 0, 0, 0, NULL, };
+struct image dirtclod4 = { "images/dirtclod4.png", NULL, 0, 0, 0, 0, NULL, };
 
 static struct static_object_entry {
 	int level;
@@ -109,8 +118,12 @@ static struct static_object_entry {
 } static_object[] = {
 	{ 0, 450.0f, 700.0f, OBJTYPE_RADAR_CONSOLE, },
 	{ 0, 150.0f, 590.0f, OBJTYPE_WALLMAP, },
-	{ 0, 130.0f, 685.0f, OBJTYPE_DESK, },
-	{ 0, 700.0f, 500.0f, OBJTYPE_SHELLS, },
+	{ 0, 130.0f, 680.0f, OBJTYPE_DESK, },
+	{ 0, 1400.0f, 450.0f, OBJTYPE_SHELLS, },
+	{ 0, 1200.0f, 385.0f, OBJTYPE_BED, },
+	{ 0, 1600.0f, 385.0f, OBJTYPE_CRATES, },
+	{ 0, 1630.0f, 600.0f, OBJTYPE_DESK, },
+	{ 0, 2250.0f, 695.0f, OBJTYPE_RADAR_CONSOLE, },
 };
 
 enum keyaction {
@@ -225,6 +238,12 @@ static int read_png_files(SDL_Renderer *renderer)
 	x += load_png_image(renderer, &desk, IMAGE_MODE_TEXTURE);
 	x += load_png_image(renderer, &radar_console, IMAGE_MODE_TEXTURE);
 	x += load_png_image(renderer, &artillery_shells, IMAGE_MODE_TEXTURE);
+	x += load_png_image(renderer, &bed, IMAGE_MODE_TEXTURE);
+	x += load_png_image(renderer, &crates, IMAGE_MODE_TEXTURE);
+	x += load_png_image(renderer, &dirtclod1, IMAGE_MODE_TEXTURE);
+	x += load_png_image(renderer, &dirtclod2, IMAGE_MODE_TEXTURE);
+	x += load_png_image(renderer, &dirtclod3, IMAGE_MODE_TEXTURE);
+	x += load_png_image(renderer, &dirtclod4, IMAGE_MODE_TEXTURE);
 	return x;
 }
 
@@ -433,8 +452,8 @@ static void set_up_object_type_data(void)
 	object_type[n].image = malloc(1 * sizeof(*object_type[0].image));
 	object_type[n].image[0] = &desk;
 	object_type[n].nimages = 1;
-	object_type[n].scalex = 0.12;
-	object_type[n].scaley = 0.12;
+	object_type[n].scalex = 0.15;
+	object_type[n].scaley = 0.15;
 	object_type[n].draw = draw_object;
 
 	n = OBJTYPE_RADAR_CONSOLE;
@@ -449,8 +468,35 @@ static void set_up_object_type_data(void)
 	object_type[n].image = malloc(1 * sizeof(*object_type[0].image));
 	object_type[n].image[0] = &artillery_shells;
 	object_type[n].nimages = 1;
-	object_type[n].scalex = 0.5;
-	object_type[n].scaley = 0.5;
+	object_type[n].scalex = 0.15;
+	object_type[n].scaley = 0.15;
+	object_type[n].draw = draw_object;
+
+	n = OBJTYPE_BED;
+	object_type[n].image = malloc(1 * sizeof(*object_type[0].image));
+	object_type[n].image[0] = &bed;
+	object_type[n].nimages = 1;
+	object_type[n].scalex = 0.25;
+	object_type[n].scaley = 0.25;
+	object_type[n].draw = draw_object;
+
+	n = OBJTYPE_CRATES;
+	object_type[n].image = malloc(1 * sizeof(*object_type[0].image));
+	object_type[n].image[0] = &crates;
+	object_type[n].nimages = 1;
+	object_type[n].scalex = 0.65;
+	object_type[n].scaley = 0.65;
+	object_type[n].draw = draw_object;
+
+	n = OBJTYPE_DIRTCLOD;
+	object_type[n].image = malloc(4 * sizeof(*object_type[0].image));
+	object_type[n].image[0] = &dirtclod1;
+	object_type[n].image[1] = &dirtclod2;
+	object_type[n].image[2] = &dirtclod3;
+	object_type[n].image[3] = &dirtclod4;
+	object_type[n].nimages = 4;
+	object_type[n].scalex = 0.3;
+	object_type[n].scaley = 0.3;
 	object_type[n].draw = draw_object;
 }
 
