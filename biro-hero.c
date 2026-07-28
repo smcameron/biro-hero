@@ -1000,7 +1000,7 @@ void render(struct game_state *game)
 		goto done;
 	draw_level(game->renderer);
 
-	for (int i = 0; i < snis_object_pool_highest_object(game->objpool); i++) {
+	for (int i = 0; i <= snis_object_pool_highest_object(game->objpool); i++) {
 		if (!snis_object_pool_is_allocated(game->objpool, i))
 			continue;
 		struct game_object *o = &go[i];
