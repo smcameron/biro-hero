@@ -69,6 +69,7 @@ static struct game_object {
 	float next_animation_tick;
 	int shooting;
 	uint32_t last_shot_time;
+	int hit_points;
 } go[MAX_GAME_OBJS];
 
 static struct game_object *player;
@@ -550,6 +551,8 @@ static void set_up_level(int l)
 		o->is_grounded = 1;
 		o->is_climbing = 0;
 		o->next_animation_tick = 0.0;
+		if (o->type == OBJTYPE_SOLDIER)
+			o->hit_points = 1 + randn(3);
 	}
 }
 
@@ -1198,6 +1201,60 @@ static void move_objects(float delta_time)
 	}
 }
 
+static void reap_dead_soldier(struct game_object *o)
+{
+	int n = snis_object_pool_alloc_obj(game.objpool);
+	if (n < 0)
+		goto get_rid_of_soldier;
+	struct game_object *blood = &go[n];
+	struct object_type_data *odt = &object_type[o->type];
+	float half_height = (odt->image[0]->height * odt->scaley) / 2.0f;
+	blood->x = o->x;
+	blood->y = o->y + half_height + 8;
+	blood->type = OBJTYPE_BLOOD_PATCH;
+	blood->current_image = randn(object_type[blood->type].nimages);
+	blood->vx = 0.0f;
+	blood->vy = 0.0f;
+	blood->is_grounded = o->is_grounded;
+	blood->is_climbing = 0;
+
+	n = snis_object_pool_alloc_obj(game.objpool);
+	if (n < 0)
+		goto get_rid_of_soldier;
+
+	struct game_object *body = &go[n];
+	body->x = o->x;
+	body->y = o->y + half_height;
+	body->type = OBJTYPE_DEAD_SOLDIER;
+	body->current_image = randn(object_type[body->type].nimages);
+	printf("body nimages = %d\n", object_type[body->type].nimages);
+	printf("current body = %d\n", body->current_image);
+	body->vx = 0.0f;
+	body->vy = 0.0f;
+	body->is_grounded = o->is_grounded;
+	body->is_climbing = 0;
+
+get_rid_of_soldier:
+	snis_object_pool_free_object(game.objpool, o - &go[0]);
+}
+
+static void reap_dead_soldiers(void)
+{
+	for (int i = 0; i <= snis_object_pool_highest_object(game.objpool); i++) {
+		if (!snis_object_pool_is_allocated(game.objpool, i))
+			continue;
+		struct game_object *o = &go[i];
+		switch (o->type) {
+		case OBJTYPE_SOLDIER:
+			if (o->hit_points == 0)
+				reap_dead_soldier(o);
+			break;
+		default:
+			break;
+		}
+	}
+}
+
 static void player_shoot(struct game_object *o)
 {
 	if (player->is_climbing) /* can't shoot from ladder */
@@ -1238,7 +1295,8 @@ static int player_shot_sampler(int x, int y, void *context)
 				else
 					vxb = 2.0f;
 				add_sparks(20, OBJTYPE_BLOOD_DROP, x, y, 2.0f, vxb, 0.0f, 20);
-				/* TODO: wound or kill soldier here */
+				if (o->hit_points > 0)
+					o->hit_points--;
 				return -1;
 			}
 		}
@@ -1375,6 +1433,7 @@ void update(float delta_time)
 	}
 	move_objects(delta_time);
 	move_sparks(delta_time);
+	reap_dead_soldiers();
 }
 
 static void draw_background_image(SDL_Renderer *renderer)
