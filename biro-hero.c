@@ -103,6 +103,7 @@ static struct game_object *player;
 #define OBJTYPE_SMOKE7 24
 #define OBJTYPE_SMOKE8 25
 #define OBJTYPE_SMOKE9 26
+#define OBJTYPE_MUZZLE_FLASH 27
 
 static struct object_type_data {
 	struct image **image;
@@ -166,6 +167,8 @@ struct image dirtspeck1 = { "images/dirt-speck1.png", NULL, 0, 0, 0, 0, NULL, };
 struct image dirtspeck2 = { "images/dirt-speck2.png", NULL, 0, 0, 0, 0, NULL, };
 struct image dirtspeck3 = { "images/dirt-speck3.png", NULL, 0, 0, 0, 0, NULL, };
 struct image grenade = { "images/grenade.png", NULL, 0, 0, 0, 0, NULL, };
+struct image muzzle_flash_right = { "images/muzzle-flash-right.png", NULL, 0, 0, 0, 0, NULL, };
+struct image muzzle_flash_left = { "images/muzzle-flash-left.png", NULL, 0, 0, 0, 0, NULL, };
 struct image smoke[] = {
 	{ "images/smoke1.png", NULL, 0, 0, 0, 0, NULL, },
 	{ "images/smoke2.png", NULL, 0, 0, 0, 0, NULL, },
@@ -480,6 +483,8 @@ static int read_png_files(SDL_Renderer *renderer)
 	x += load_png_image(renderer, &dirtspeck2, IMAGE_MODE_TEXTURE);
 	x += load_png_image(renderer, &dirtspeck3, IMAGE_MODE_TEXTURE);
 	x += load_png_image(renderer, &grenade, IMAGE_MODE_TEXTURE);
+	x += load_png_image(renderer, &muzzle_flash_right, IMAGE_MODE_TEXTURE);
+	x += load_png_image(renderer, &muzzle_flash_left, IMAGE_MODE_TEXTURE);
 	for (int i = 0; i < 9; i++)
 		x+= load_png_image(renderer, &smoke[i], IMAGE_MODE_TEXTURE);
 	return x;
@@ -864,6 +869,15 @@ static void set_up_object_type_data(void)
 	object_type[n].nimages = 1;
 	object_type[n].scalex = 1.0;
 	object_type[n].scaley = 1.0;
+	object_type[n].draw = draw_object;
+
+	n = OBJTYPE_MUZZLE_FLASH;
+	object_type[n].image = malloc(2 * sizeof(*object_type[0].image));
+	object_type[n].image[0] = &muzzle_flash_right;
+	object_type[n].image[1] = &muzzle_flash_left;
+	object_type[n].nimages = 1;
+	object_type[n].scalex = 0.3;
+	object_type[n].scaley = 0.3;
 	object_type[n].draw = draw_object;
 
 	for (n = 0 + OBJTYPE_SMOKE1; n < 9 + OBJTYPE_SMOKE1; n++) {
@@ -1344,6 +1358,12 @@ static void move_objects(float delta_time)
 		case OBJTYPE_GRENADE:
 			move_grenade(o, delta_time);
 			break;
+		case OBJTYPE_MUZZLE_FLASH:
+			if (o->hit_points > 0)
+				o->hit_points--;
+			if (o->hit_points == 0)
+				snis_object_pool_free_object(game.objpool, o - &go[0]);
+			break;
 		default:
 			break;
 		}
@@ -1599,7 +1619,29 @@ void update(float delta_time)
 			targetx = player->x - 1000;
 		targety = player->y + (xorshift(&seed) & 0x03f) - 63;
 		bline(player->x, player->y, targetx, targety, bullet_shot_sampler, player);
+		int i = snis_object_pool_alloc_obj(game.objpool);
+		if (i < 0)
+			goto out;
+		struct game_object *o = &go[i];
+		o->type = OBJTYPE_MUZZLE_FLASH;
+		if (player->current_image >= 0 && player->current_image <= 2) { /* facing right? */
+			o->current_image = 0;
+			o->x = player->x + 25;
+			o->y = player->y - 5;
+		} else {
+			o->current_image = 1;
+			o->x = player->x - 30;
+			o->y = player->y - 5;
+		}
+		o->vx = 0;
+		o->vy = 0;
+		o->next_animation_tick = 0;
+		o->is_climbing = 0;
+		o->is_grounded = 0;
+		o->throwing_grenade = 0;
+		o->hit_points = 4;
 	}
+out:
 	if (player->throwing_grenade) {
 		float angle;
 		int i = snis_object_pool_alloc_obj(game.objpool);
