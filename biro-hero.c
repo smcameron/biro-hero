@@ -1267,8 +1267,9 @@ static void player_shoot(struct game_object *o)
 	player->shooting = 1;
 }
 
-static int player_shot_sampler(int x, int y, void *context)
+static int bullet_shot_sampler(int x, int y, void *context)
 {
+	struct game_object *shooter = context;
 	if (x < 0)
 		return -1;
 	if (x >= 4096)
@@ -1287,18 +1288,22 @@ static int player_shot_sampler(int x, int y, void *context)
 			if (o->type != OBJTYPE_SOLDIER)
 				continue;
 			float dist2 = (o->x - x) * (o->x -x) + (o->y - y) * (o->y - y);
-			if (dist2 < 25.0f) {
-				fprintf(stderr, "Hit soldier %d\n", i);
-				float vxb;
-				if (player->current_image < 3)
-					vxb = -2.0f;
-				else
-					vxb = 2.0f;
-				add_sparks(20, OBJTYPE_BLOOD_DROP, x, y, 2.0f, vxb, 0.0f, 20);
-				if (o->hit_points > 0)
-					o->hit_points--;
-				return -1;
+			if (dist2 >= 25.0f)
+				continue;
+			fprintf(stderr, "Hit soldier %d\n", i);
+			float vxb = 0.0f;
+			if (shooter && snis_object_pool_is_allocated(game.objpool, shooter - &go[0])) {
+				if (shooter->type == OBJTYPE_PLAYER) {
+					if (shooter->current_image < 3)
+						vxb = -2.0f;
+					else
+						vxb = 2.0f;
+				}
 			}
+			add_sparks(20, OBJTYPE_BLOOD_DROP, x, y, 2.0f, vxb, 0.0f, 20);
+			if (o->hit_points > 0)
+				o->hit_points--;
+			return -1;
 		}
 		return 0;
 	} else {
@@ -1429,7 +1434,7 @@ void update(float delta_time)
 		else
 			targetx = player->x - 1000;
 		targety = player->y + (xorshift(&seed) & 0x0f) - 7;
-		bline(player->x, player->y, targetx, targety, player_shot_sampler, NULL);
+		bline(player->x, player->y, targetx, targety, bullet_shot_sampler, player);
 	}
 	move_objects(delta_time);
 	move_sparks(delta_time);
