@@ -14,7 +14,7 @@ LIBS=${SDLLIBS} -lpng -lm ${SNDLIBS}
 CFLAGS=-fsanitize=address -Wall -Wextra --pedantic ${SDLCFLAGS} -g3 -pthread ${SNDFLAGS}
 LDFLAGS=-fsanitize=address
 
-OBJFILES=png_utils.o snis_alloc.o stacktrace.o vec3.o wwviaudio.o ogg_to_pcm.o
+OBJFILES=png_utils.o snis_alloc.o stacktrace.o vec3.o wwviaudio.o ogg_to_pcm.o bline.o
 
 all:	biro-hero
 
@@ -35,6 +35,9 @@ vec3.o:	vec3.h vec3.c
 
 stacktrace.o:	stacktrace.h stacktrace.c
 	${CC} ${CFLAGS} -c -o stacktrace.o stacktrace.c
+
+bline.o:	bline.h bline.c
+	${CC} ${CFLAGS} -c bline.c -o bline.o
 
 biro-hero.o:	biro-hero.c png_utils.h
 	${CC} ${CFLAGS} -c -o biro-hero.o  biro-hero.c

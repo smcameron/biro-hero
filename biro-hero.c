@@ -11,6 +11,7 @@
 #include "vec3.h"
 #include "wwviaudio.h"
 #include "ogg_to_pcm.h"
+#include "bline.h"
 
 #define ARRAYSIZE(x) (int) (sizeof(x) / sizeof((x)[0]))
 
@@ -1030,6 +1031,39 @@ static void player_shoot(struct game_object *o)
 	player->shooting = 1;
 }
 
+static int player_shot_sampler(int x, int y, void *context)
+{
+	if (x < 0)
+		return -1;
+	if (x >= 4096)
+		return -1;
+	if (y < 0)
+		return -1;
+	if (y >= 768)
+		return -1;
+
+	if (is_passable(x, y))  {
+		/* Check for collisions with soldiers */
+		for (int i = 0; i <= snis_object_pool_highest_object(game.objpool); i++) {
+			if (!snis_object_pool_is_allocated(game.objpool, i))
+				continue;
+			struct game_object *o = &go[i];
+			if (o->type != OBJTYPE_SOLDIER)
+				continue;
+			float dist2 = (o->x - x) * (o->x -x) + (o->y - y) * (o->y - y);
+			if (dist2 < 25.0f) {
+				fprintf(stderr, "Hit soldier %d\n", i);
+				/* TODO: wound or kill soldier here */
+				return -1;
+			}
+		}
+		return 0;
+	} else {
+		/* TODO: throw off some sparks or something */
+		return -1;
+	}
+}
+
 /* Update game logic (positions, physics, AI) based on delta time */
 void update(float delta_time)
 {
@@ -1145,6 +1179,14 @@ void update(float delta_time)
 	if (player->shooting) {
 		player->shooting = 0;
 		/* TODO: add muzzle flash and do some ray casting */
+		int targetx, targety;
+		static uint32_t seed = 0xBADBABE;
+		if (player->current_image >= 0 && player->current_image <= 2) /* facing right? */
+			targetx = player->x + 1000;
+		else
+			targetx = player->x - 1000;
+		targety = player->y + (xorshift(&seed) & 0x0f) - 7;
+		bline(player->x, player->y, targetx, targety, player_shot_sampler, NULL);
 	}
 	move_objects(delta_time);
 }
