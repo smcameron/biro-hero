@@ -94,6 +94,15 @@ static struct game_object *player;
 #define OBJTYPE_BLOOD_DROP 15
 #define OBJTYPE_DIRT_SPECK 16
 #define OBJTYPE_GRENADE 17
+#define OBJTYPE_SMOKE1 18
+#define OBJTYPE_SMOKE2 19
+#define OBJTYPE_SMOKE3 20
+#define OBJTYPE_SMOKE4 21
+#define OBJTYPE_SMOKE5 22
+#define OBJTYPE_SMOKE6 23
+#define OBJTYPE_SMOKE7 24
+#define OBJTYPE_SMOKE8 25
+#define OBJTYPE_SMOKE9 26
 
 static struct object_type_data {
 	struct image **image;
@@ -157,6 +166,17 @@ struct image dirtspeck1 = { "images/dirt-speck1.png", NULL, 0, 0, 0, 0, NULL, };
 struct image dirtspeck2 = { "images/dirt-speck2.png", NULL, 0, 0, 0, 0, NULL, };
 struct image dirtspeck3 = { "images/dirt-speck3.png", NULL, 0, 0, 0, 0, NULL, };
 struct image grenade = { "images/grenade.png", NULL, 0, 0, 0, 0, NULL, };
+struct image smoke[] = {
+	{ "images/smoke1.png", NULL, 0, 0, 0, 0, NULL, },
+	{ "images/smoke2.png", NULL, 0, 0, 0, 0, NULL, },
+	{ "images/smoke3.png", NULL, 0, 0, 0, 0, NULL, },
+	{ "images/smoke4.png", NULL, 0, 0, 0, 0, NULL, },
+	{ "images/smoke5.png", NULL, 0, 0, 0, 0, NULL, },
+	{ "images/smoke6.png", NULL, 0, 0, 0, 0, NULL, },
+	{ "images/smoke7.png", NULL, 0, 0, 0, 0, NULL, },
+	{ "images/smoke8.png", NULL, 0, 0, 0, 0, NULL, },
+	{ "images/smoke9.png", NULL, 0, 0, 0, 0, NULL, },
+};
 
 static struct static_object_entry {
 	int level;
@@ -283,12 +303,38 @@ static int randn(int n)
 
 static void move_spark(struct spark_object *s, float delta_time)
 {
-	s->x += s->vx  /* * delta_time */ ;
-	s->y += s->vy /* * delta_time */ ;
+	switch (s->type) {
+	case OBJTYPE_DIRT_SPECK:
+	case OBJTYPE_BLOOD_DROP:
+		s->x += s->vx  /* * delta_time */ ;
+		s->y += s->vy /* * delta_time */ ;
 #define SPARK_GRAVITY 0.1f
-	s->vy += SPARK_GRAVITY;
-	if (s->alive > 0)
-		s->alive--;
+		s->vy += SPARK_GRAVITY;
+		if (s->alive > 0)
+			s->alive--;
+		break;
+	case OBJTYPE_SMOKE1:
+	case OBJTYPE_SMOKE2:
+	case OBJTYPE_SMOKE3:
+	case OBJTYPE_SMOKE4:
+	case OBJTYPE_SMOKE5:
+	case OBJTYPE_SMOKE6:
+	case OBJTYPE_SMOKE7:
+	case OBJTYPE_SMOKE8:
+	case OBJTYPE_SMOKE9:
+		s->x += s->vx;
+		s->y += s->vy;
+		/* no gravity on smoke */
+		if (s->alive > 0)
+			s->alive--;
+		if (s->alive % 10 == 0) {
+			if (s->type < OBJTYPE_SMOKE9)
+				s->type++; /* make smoke smaller */
+		}
+		break;
+	default:
+		break;
+	}
 }
 
 static void move_sparks(float delta_time)
@@ -431,6 +477,8 @@ static int read_png_files(SDL_Renderer *renderer)
 	x += load_png_image(renderer, &dirtspeck2, IMAGE_MODE_TEXTURE);
 	x += load_png_image(renderer, &dirtspeck3, IMAGE_MODE_TEXTURE);
 	x += load_png_image(renderer, &grenade, IMAGE_MODE_TEXTURE);
+	for (int i = 0; i < 9; i++)
+		x+= load_png_image(renderer, &smoke[i], IMAGE_MODE_TEXTURE);
 	return x;
 }
 
@@ -814,6 +862,15 @@ static void set_up_object_type_data(void)
 	object_type[n].scalex = 1.0;
 	object_type[n].scaley = 1.0;
 	object_type[n].draw = draw_object;
+
+	for (n = 0 + OBJTYPE_SMOKE1; n < 9 + OBJTYPE_SMOKE1; n++) {
+		object_type[n].image = malloc(1 * sizeof(*object_type[0].image));
+		object_type[n].image[0] = &smoke[n - OBJTYPE_SMOKE1];
+		object_type[n].nimages = 1;
+		object_type[n].scalex = 0.5;
+		object_type[n].scaley = 0.5;
+		object_type[n].draw = draw_object;
+	}
 }
 
 /* Initialize SDL, window, and renderer */
@@ -1262,6 +1319,7 @@ static void move_grenade(struct game_object *o, float delta_time)
 			bline(o->x, o->y, targetx, targety, bullet_shot_sampler, o);
 		}
 		snis_object_pool_free_object(game.objpool, o - &go[0]);
+		add_sparks(10, OBJTYPE_SMOKE1, o->x, o->y, 2.0f, 0.0, -2.0f, 99);
 		wwviaudio_add_sound(GRENADE_EXPLOSION);
 	}
 }
