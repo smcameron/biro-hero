@@ -1433,7 +1433,7 @@ void update(float delta_time)
 			targetx = player->x + 1000;
 		else
 			targetx = player->x - 1000;
-		targety = player->y + (xorshift(&seed) & 0x0f) - 7;
+		targety = player->y + (xorshift(&seed) & 0x03f) - 63;
 		bline(player->x, player->y, targetx, targety, bullet_shot_sampler, player);
 	}
 	move_objects(delta_time);
