@@ -1205,14 +1205,52 @@ static void move_soldier(struct game_object *o, float delta_time)
 }
 static int bullet_shot_sampler(int x, int y, void *context);
 
-#define GRENADE_FUSE_TIME_SECS 1.0
+#define GRENADE_FUSE_TIME_SECS 4.0
 #define GRENADE_FRAGMENT_COUNT 30
 #define GRENADE_LAUNCH_SPEED 6.0f
 static void move_grenade(struct game_object *o, float delta_time)
 {
-	o->x += o->vx;
-	o->y += o->vy;
+	struct object_type_data *odt = &object_type[o->type];
+	float half_width = (odt->image[0]->width * odt->scalex) / 2.0f;
+	float half_height = (odt->image[0]->height * odt->scaley) / 2.0f;
+
 	o->vy += SPARK_GRAVITY;
+
+	/* Horizontal movement and collision check */
+	float target_x = o->x + o->vx;
+	float check_x = o->vx > 0 ? target_x + half_width : target_x - half_width;
+
+	if (is_passable(check_x, o->y)) {
+		o->x = target_x;
+	} else {
+		/* Hit a wall: bounce horizontally with dampening and slight randomness */
+		o->vx = -o->vx * 0.7f;
+
+		/* Add minor random vertical kick */
+		static uint32_t bounce_seed = 0x13579BDF;
+		float random_fudge = ((float)(xorshift(&bounce_seed) % 20) - 10.0f) / 100.0f;
+		o->vy += random_fudge;
+	}
+
+	/* Vertical movement and collision check */
+	float target_y = o->y + o->vy;
+	float check_y = o->vy > 0 ? target_y + half_height : target_y - half_height;
+
+	if (is_passable(o->x, check_y)) {
+		o->y = target_y;
+	} else {
+		/* Hit floor or ceiling: bounce vertically with dampening */
+		if (o->vy > 0) /* Ground bounce: also add a bit of friction/damping to vx */
+			o->vx *= 0.8f;
+		o->vy = -o->vy * 0.5f; /* Less elastic bounce for the floor */
+
+		/* Add random horizontal spin/deflection on impact */
+		static uint32_t floor_seed = 0x2468ACE0;
+		float random_fudge = ((float)(xorshift(&floor_seed) % 40) - 20.0f) / 100.0f;
+		o->vx += random_fudge;
+	}
+
+	/* Fuse expiration check */
 	uint32_t now = SDL_GetTicks();
 	if (now > o->next_animation_tick) {
 		/* Explode the grenade */
