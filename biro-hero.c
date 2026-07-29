@@ -268,6 +268,8 @@ const union vec3 GREEN = { { 0.0f, 1.0f, 0.0f } };
 #define RIFLE_BURST_FIRE 4
 #define AR15_SHOT 5
 #define GRENADE_EXPLOSION 6
+#define GRENADE_BOUNCE1 7
+#define GRENADE_BOUNCE2 8
 
 /* George Marsaglia's xorshift PRNG algorithm,
  * see: https://en.wikipedia.org/wiki/Xorshift#Example_implementation
@@ -1288,6 +1290,8 @@ static void move_grenade(struct game_object *o, float delta_time)
 		static uint32_t bounce_seed = 0x13579BDF;
 		float random_fudge = ((float)(xorshift(&bounce_seed) % 20) - 10.0f) / 100.0f;
 		o->vy += random_fudge;
+		if (fabsf(o->vx) > 1.0f) /* prevent rattling */
+			wwviaudio_add_sound(GRENADE_BOUNCE1 + ((int) (random_fudge * 100) & 0x01));
 	}
 
 	/* Vertical movement and collision check */
@@ -1306,6 +1310,8 @@ static void move_grenade(struct game_object *o, float delta_time)
 		static uint32_t floor_seed = 0x2468ACE0;
 		float random_fudge = ((float)(xorshift(&floor_seed) % 40) - 20.0f) / 100.0f;
 		o->vx += random_fudge;
+		if (fabsf(o->vy) > 1.0f) /* prevent rattling */
+			wwviaudio_add_sound(GRENADE_BOUNCE1 + ((int) (random_fudge * 100) & 0x01));
 	}
 
 	/* Fuse expiration check */
@@ -1862,6 +1868,8 @@ static void setup_audio_system(void)
 	wwviaudio_read_ogg_clip(RIFLE_BURST_FIRE, "sounds/rifle-burst-fire.ogg");
 	wwviaudio_read_ogg_clip(AR15_SHOT, "sounds/ar15-shot.ogg");
 	wwviaudio_read_ogg_clip(GRENADE_EXPLOSION, "sounds/grenade-explosion.ogg");
+	wwviaudio_read_ogg_clip(GRENADE_BOUNCE1, "sounds/grenade-bounce-1.ogg");
+	wwviaudio_read_ogg_clip(GRENADE_BOUNCE2, "sounds/grenade-bounce-2.ogg");
 }
 
 static void maybe_play_ambient_sounds(Uint32 now)
