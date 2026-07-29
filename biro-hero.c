@@ -36,7 +36,8 @@ struct game_state {
 	float camera_max_x;
 	float desired_camera_x;
 	int window_width, window_height;
-	struct snis_object_pool *objpool;
+	struct snis_object_pool *objpool; /* controls allocation of go[] */
+	struct snis_object_pool *sparkpool;  /* controlls allocation of spark[] */
 } game = { 0 };
 
 struct image {
@@ -85,6 +86,10 @@ static struct game_object *player;
 #define OBJTYPE_TNT 10
 #define OBJTYPE_AMMO 11
 #define OBJTYPE_FLAG 12
+#define OBJTYPE_DEAD_SOLDIER 13
+#define OBJTYPE_BLOOD_PATCH 14
+#define OBJTYPE_BLOOD_DROP 15
+#define OBJTYPE_DIRT_SPECK 16
 
 static struct object_type_data {
 	struct image **image;
@@ -133,6 +138,20 @@ struct image hero_ladder_1 = { "images/hero-ladder-1.png", NULL, 0, 0, 0, 0, NUL
 struct image hero_ladder_2 = { "images/hero-ladder-2.png", NULL, 0, 0, 0, 0, NULL, };
 struct image hero_ladder_3 = { "images/hero-ladder-3.png", NULL, 0, 0, 0, 0, NULL, };
 struct image russflag = { "images/flag.png", NULL, 0, 0, 0, 0, NULL, };
+struct image deadsoldier1 = { "images/deadsoldier1.png", NULL, 0, 0, 0, 0, NULL, };
+struct image deadsoldier2 = { "images/deadsoldier2.png", NULL, 0, 0, 0, 0, NULL, };
+struct image deadsoldier3 = { "images/deadsoldier3.png", NULL, 0, 0, 0, 0, NULL, };
+struct image deadsoldier4 = { "images/deadsoldier4.png", NULL, 0, 0, 0, 0, NULL, };
+struct image bloodpatch1 = { "images/bloodpatch1.png", NULL, 0, 0, 0, 0, NULL, };
+struct image bloodpatch2 = { "images/bloodpatch2.png", NULL, 0, 0, 0, 0, NULL, };
+struct image bloodpatch3 = { "images/bloodpatch3.png", NULL, 0, 0, 0, 0, NULL, };
+struct image bloodpatch4 = { "images/bloodpatch4.png", NULL, 0, 0, 0, 0, NULL, };
+struct image blooddrop1 = { "images/blood-drop1.png", NULL, 0, 0, 0, 0, NULL, };
+struct image blooddrop2 = { "images/blood-drop2.png", NULL, 0, 0, 0, 0, NULL, };
+struct image blooddrop3 = { "images/blood-drop3.png", NULL, 0, 0, 0, 0, NULL, };
+struct image dirtspeck1 = { "images/dirt-speck1.png", NULL, 0, 0, 0, 0, NULL, };
+struct image dirtspeck2 = { "images/dirt-speck2.png", NULL, 0, 0, 0, 0, NULL, };
+struct image dirtspeck3 = { "images/dirt-speck3.png", NULL, 0, 0, 0, 0, NULL, };
 
 static struct static_object_entry {
 	int level;
@@ -183,6 +202,15 @@ static struct static_object_entry {
 	{ 0, 2112.0f, 718.0f, OBJTYPE_BARREL, },
 };
 
+#define MAXSPARKS 1000
+
+static struct spark_object {
+	float x, y, vx, vy;
+	int alive;
+	int type;
+	int current_image;
+} spark[MAXSPARKS] = { 0 }; /* blood drops and dirt specks from bullet impacts */
+
 enum keyaction {
 	keyright,
 	keyleft,
@@ -229,6 +257,75 @@ uint32_t xorshift(uint32_t *state)
 	x ^= x << 5;
 	*state = x;
 	return x;
+}
+
+static float random_angle_rads(void)
+{
+	static uint32_t seed = 0xBADA55;
+
+	uint32_t deg = (xorshift(&seed) % 360);
+	return (float) deg * M_PI / 180.0f;
+}
+
+static int randn(int n)
+{
+	static uint32_t seed = 0xa5a5a5a5;
+	uint32_t x = xorshift(&seed);
+	x &= 0x7fffffff; /* make sure it's positive */
+	return (int) (x % n);
+}
+
+static void move_spark(struct spark_object *s, float delta_time)
+{
+	s->x += s->vx  /* * delta_time */ ;
+	s->y += s->vy /* * delta_time */ ;
+#define SPARK_GRAVITY 0.1f
+	s->vy += SPARK_GRAVITY;
+	if (s->alive > 0)
+		s->alive--;
+}
+
+static void move_sparks(float delta_time)
+{
+	/* Move all the sparks */
+	for (int i = 0; i <= snis_object_pool_highest_object(game.sparkpool); i++) {
+		if (!snis_object_pool_is_allocated(game.sparkpool, i))
+			continue;
+		move_spark(&spark[i], delta_time);
+	}
+	/* Free dead sparks */
+	for (int i = 0; i <= snis_object_pool_highest_object(game.sparkpool); i++) {
+		if (!snis_object_pool_is_allocated(game.sparkpool, i))
+			continue;
+		if (!spark[i].alive)
+			snis_object_pool_free_object(game.sparkpool, i);
+	}
+}
+
+static void add_spark(int type, float x, float y, float v,
+		float vxbias, float vybias, int time_to_live)
+{
+	int i = snis_object_pool_alloc_obj(game.sparkpool);
+	if (i < 0)
+		return;
+	struct spark_object *s = &spark[i];
+	s->x = x;
+	s->y = y;
+	float angle = random_angle_rads();
+	float speed = (float) randn((int) (v * 100)) / 100.0f;
+	s->vx = speed * cos(angle);
+	s->vy = speed * sin(angle);
+	s->vx += vxbias;
+	s->vy += vybias;
+	s->type = type;
+	s->alive = time_to_live;
+}
+
+static void add_sparks(int count, int type, float x, float y, float v,
+		float vxbias, float vybias, int time_to_live)
+{
+	for (int i = 0; i < count; i++)
+		add_spark(type, x, y, v, vxbias, vybias, time_to_live);
 }
 
 static void draw_rectangle(SDL_Renderer *renderer,
@@ -313,6 +410,20 @@ static int read_png_files(SDL_Renderer *renderer)
 	x += load_png_image(renderer, &hero_ladder_2, IMAGE_MODE_TEXTURE);
 	x += load_png_image(renderer, &hero_ladder_3, IMAGE_MODE_TEXTURE);
 	x += load_png_image(renderer, &russflag, IMAGE_MODE_TEXTURE);
+	x += load_png_image(renderer, &deadsoldier1, IMAGE_MODE_TEXTURE);
+	x += load_png_image(renderer, &deadsoldier2, IMAGE_MODE_TEXTURE);
+	x += load_png_image(renderer, &deadsoldier3, IMAGE_MODE_TEXTURE);
+	x += load_png_image(renderer, &deadsoldier4, IMAGE_MODE_TEXTURE);
+	x += load_png_image(renderer, &bloodpatch1, IMAGE_MODE_TEXTURE);
+	x += load_png_image(renderer, &bloodpatch2, IMAGE_MODE_TEXTURE);
+	x += load_png_image(renderer, &bloodpatch3, IMAGE_MODE_TEXTURE);
+	x += load_png_image(renderer, &bloodpatch4, IMAGE_MODE_TEXTURE);
+	x += load_png_image(renderer, &blooddrop1, IMAGE_MODE_TEXTURE);
+	x += load_png_image(renderer, &blooddrop2, IMAGE_MODE_TEXTURE);
+	x += load_png_image(renderer, &blooddrop3, IMAGE_MODE_TEXTURE);
+	x += load_png_image(renderer, &dirtspeck1, IMAGE_MODE_TEXTURE);
+	x += load_png_image(renderer, &dirtspeck2, IMAGE_MODE_TEXTURE);
+	x += load_png_image(renderer, &dirtspeck3, IMAGE_MODE_TEXTURE);
 	return x;
 }
 
@@ -498,6 +609,31 @@ static void draw_object(SDL_Renderer *renderer, struct game_object *o)
 	SDL_RenderSetClipRect(renderer, NULL); /* Remove the clipping rectangle */
 }
 
+static void draw_spark(SDL_Renderer *renderer, struct spark_object *s)
+{
+	struct object_type_data *odt = &object_type[s->type];
+	struct image **im = odt->image;
+	int i = s->current_image;
+	float windowx_scale = game.window_width / WINDOW_WIDTH;
+	float windowy_scale = game.window_height / WINDOW_HEIGHT;
+	float scx = odt->scalex * windowx_scale;
+	float scy = odt->scaley * windowy_scale;
+	float w = scx * im[i]->width;
+	float h = scy * im[i]->height;
+
+	SDL_Rect destrect = {
+		world_to_screenx(s->x - 0.5 * w),
+		world_to_screeny(s->y - 0.5 * h),
+		w, h };
+
+	/* Define the clipping region: 100px from left and right edges */
+	SDL_Rect clip_rect = { 100, 0, game.window_width - 200, game.window_height };
+	SDL_RenderSetClipRect(renderer, &clip_rect); /* Apply the clipping rectangle */
+	SDL_SetTextureBlendMode(im[i]->texture, SDL_BLENDMODE_MOD);
+	SDL_RenderCopy(renderer, im[i]->texture, NULL, &destrect);
+	SDL_RenderSetClipRect(renderer, NULL); /* Remove the clipping rectangle */
+}
+
 static void set_up_object_type_data(void)
 {
 	/* Setup OBJTYPE_PLAYER data */
@@ -619,6 +755,48 @@ static void set_up_object_type_data(void)
 	object_type[n].scalex = 0.35;
 	object_type[n].scaley = 0.35;
 	object_type[n].draw = draw_object;
+
+	n = OBJTYPE_DEAD_SOLDIER;
+	object_type[n].image = malloc(4 * sizeof(*object_type[0].image));
+	object_type[n].image[0] = &deadsoldier1;
+	object_type[n].image[1] = &deadsoldier1;
+	object_type[n].image[2] = &deadsoldier1;
+	object_type[n].image[3] = &deadsoldier1;
+	object_type[n].nimages = 4;
+	object_type[n].scalex = 0.18;
+	object_type[n].scaley = 0.18;
+	object_type[n].draw = draw_object;
+
+	n = OBJTYPE_BLOOD_PATCH;
+	object_type[n].image = malloc(4 * sizeof(*object_type[0].image));
+	object_type[n].image[0] = &bloodpatch1;
+	object_type[n].image[1] = &bloodpatch2;
+	object_type[n].image[2] = &bloodpatch3;
+	object_type[n].image[3] = &bloodpatch4;
+	object_type[n].nimages = 4;
+	object_type[n].scalex = 0.18;
+	object_type[n].scaley = 0.18;
+	object_type[n].draw = draw_object;
+
+	n = OBJTYPE_BLOOD_DROP;
+	object_type[n].image = malloc(3 * sizeof(*object_type[0].image));
+	object_type[n].image[0] = &blooddrop1;
+	object_type[n].image[1] = &blooddrop2;
+	object_type[n].image[2] = &blooddrop3;
+	object_type[n].nimages = 3;
+	object_type[n].scalex = 1.0;
+	object_type[n].scaley = 1.0;
+	object_type[n].draw = draw_object;
+
+	n = OBJTYPE_DIRT_SPECK;
+	object_type[n].image = malloc(3 * sizeof(*object_type[0].image));
+	object_type[n].image[0] = &dirtspeck1;
+	object_type[n].image[1] = &dirtspeck2;
+	object_type[n].image[2] = &dirtspeck3;
+	object_type[n].nimages = 3;
+	object_type[n].scalex = 1.0;
+	object_type[n].scaley = 1.0;
+	object_type[n].draw = draw_object;
 }
 
 /* Initialize SDL, window, and renderer */
@@ -658,6 +836,7 @@ bool init_game(struct game_state *game)
 	game->is_running = true;
 	game->camera_x = 1024.0 / 2.0;
 	snis_object_pool_setup(&game->objpool, MAX_GAME_OBJS);
+	snis_object_pool_setup(&game->sparkpool, MAXSPARKS);
 	player_init();
 	set_up_level(0);
 
@@ -1053,13 +1232,19 @@ static int player_shot_sampler(int x, int y, void *context)
 			float dist2 = (o->x - x) * (o->x -x) + (o->y - y) * (o->y - y);
 			if (dist2 < 25.0f) {
 				fprintf(stderr, "Hit soldier %d\n", i);
+				float vxb;
+				if (player->current_image < 3)
+					vxb = -2.0f;
+				else
+					vxb = 2.0f;
+				add_sparks(20, OBJTYPE_BLOOD_DROP, x, y, 2.0f, vxb, 0.0f, 20);
 				/* TODO: wound or kill soldier here */
 				return -1;
 			}
 		}
 		return 0;
 	} else {
-		/* TODO: throw off some sparks or something */
+		add_sparks(20, OBJTYPE_DIRT_SPECK, x, y, 2.0f, 0.0f, -2.0f, 20);
 		return -1;
 	}
 }
@@ -1189,6 +1374,7 @@ void update(float delta_time)
 		bline(player->x, player->y, targetx, targety, player_shot_sampler, NULL);
 	}
 	move_objects(delta_time);
+	move_sparks(delta_time);
 }
 
 static void draw_background_image(SDL_Renderer *renderer)
@@ -1351,6 +1537,7 @@ void render(struct game_state *game)
 		goto done;
 	draw_level(game->renderer);
 
+	/* Draw objects */
 	for (int i = 0; i <= snis_object_pool_highest_object(game->objpool); i++) {
 		if (!snis_object_pool_is_allocated(game->objpool, i))
 			continue;
@@ -1358,6 +1545,14 @@ void render(struct game_state *game)
 		if (object_type[o->type].draw)
 			object_type[o->type].draw(game->renderer, o);
 	}
+
+	/* Draw sparks */
+	for (int i = 0; i <= snis_object_pool_highest_object(game->sparkpool); i++) {
+		if (!snis_object_pool_is_allocated(game->sparkpool, i))
+			continue;
+		draw_spark(game->renderer, &spark[i]);
+	}
+
 	union vec3 colors[4];
 	sample_mask_around_object(&go[0], colors);
 	draw_debug_rectangles(player, colors);
