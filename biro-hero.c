@@ -72,6 +72,7 @@ static struct game_object {
 	uint32_t last_shot_time;
 	uint32_t last_grenade_time;
 	int hit_points;
+	uint32_t next_lookaround_time;
 } go[MAX_GAME_OBJS];
 
 static struct game_object *player;
@@ -613,8 +614,11 @@ static void set_up_level(int l)
 		o->is_grounded = 1;
 		o->is_climbing = 0;
 		o->next_animation_tick = 0.0;
-		if (o->type == OBJTYPE_SOLDIER)
+		o->next_lookaround_time = 0;
+		if (o->type == OBJTYPE_SOLDIER) {
 			o->hit_points = 1 + randn(3);
+			o->next_lookaround_time = SDL_GetTicks() + 5000 + o->i * 23;
+		}
 	}
 }
 
@@ -1197,6 +1201,51 @@ void apply_gravity_and_vertical_movement(struct game_object *o, float delta_time
 	}
 }
 
+static int shoot_at_player_sampler(int x, int y, void *context)
+{
+	/* Soldier is looking around to see if the player is shootable */
+	struct game_object *o = context;
+
+	uint32_t now = SDL_GetTicks();
+	if (now - o->last_shot_time < 333) /* throttle shots to 3 / sec */
+		return -1;
+	if (o->type != OBJTYPE_SOLDIER)
+		return -1;
+	if (!is_passable(x, y))
+		return -1;
+	float dist2 = (x - player->x) * (x - player->x) +
+			(y - player->y) * (y - player->y);
+	if (dist2 < 20*20) { /* We can see the player */
+		o->last_shot_time = now;
+		wwviaudio_add_sound(AR15_SHOT);
+		int n = snis_object_pool_alloc_obj(game.objpool);
+		if (n >= 0) {
+			struct game_object *mf = &go[n];
+			mf->type = OBJTYPE_MUZZLE_FLASH;
+			if (o->vx > 0) { /* facing right? */
+				mf->current_image = 0;
+				mf->x = o->x + 25;
+				mf->y = o->y - 5;
+			} else {
+				mf->current_image = 1;
+				mf->x = o->x - 30;
+				mf->y = o->y - 5;
+			}
+			mf->vx = 0;
+			mf->vy = 0;
+			mf->next_animation_tick = 0;
+			mf->is_climbing = 0;
+			mf->is_grounded = 0;
+			mf->throwing_grenade = 0;
+			mf->hit_points = 4;
+		}
+		/* TODO: actually shoot at player */
+		o->next_lookaround_time += 750; /* seen recently, look again sooner. */
+		return -1;
+	}
+	return 0;
+}
+
 static void move_soldier(struct game_object *o, float delta_time)
 {
 	/* 1. First frame initialization */
@@ -1275,6 +1324,22 @@ static void move_soldier(struct game_object *o, float delta_time)
 			o->current_image = (o->current_image == 2) ? 3 : 2;
 		} else {
 			o->current_image = (o->current_image == 0) ? 1 : 0;
+		}
+	}
+
+	if (o->next_lookaround_time > SDL_GetTicks()) {
+		o->next_lookaround_time += 2000;
+
+		float dist2 = (o->x - player->x) * (o->x - player->x) +
+				(o->y - player->y) * (o->y - player->y);
+		/* If the player is within 512 units of the soldier, and nearby in y,
+		 * check for a viable shot
+		 */
+		if (dist2 < 512 * 512 && fabsf(player->y - o->y) < 20.0) {
+			/* Check if soldier if facing in player's direction */
+			if ((player->x < o->x && o->vx < 0) ||
+				(player->x > o->x && o->vx > 0))
+				bline(o->x, o->y, player->x, player->y, shoot_at_player_sampler, o);
 		}
 	}
 }
