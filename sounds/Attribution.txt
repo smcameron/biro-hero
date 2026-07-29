@@ -20,3 +20,7 @@ ar15-shot.ogg
 AR15 Indoors (open windows) by modusmogulus
 https://freesound.org/s/815698/ -- License: Creative Commons 0
 
+grenade-explosion.ogg
+Explosion Outdoors (Medium) by EvanBoyerman
+https://freesound.org/s/753843/ -- License: Attribution 4.0
+

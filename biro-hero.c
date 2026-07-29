@@ -247,6 +247,7 @@ const union vec3 GREEN = { { 0.0f, 1.0f, 0.0f } };
 #define LIGHT_MACHINE_GUN 3
 #define RIFLE_BURST_FIRE 4
 #define AR15_SHOT 5
+#define GRENADE_EXPLOSION 6
 
 /* George Marsaglia's xorshift PRNG algorithm,
  * see: https://en.wikipedia.org/wiki/Xorshift#Example_implementation
@@ -1261,7 +1262,7 @@ static void move_grenade(struct game_object *o, float delta_time)
 			bline(o->x, o->y, targetx, targety, bullet_shot_sampler, o);
 		}
 		snis_object_pool_free_object(game.objpool, o - &go[0]);
-		/* TODO: play grenade explosion sound */
+		wwviaudio_add_sound(GRENADE_EXPLOSION);
 	}
 }
 
@@ -1802,6 +1803,7 @@ static void setup_audio_system(void)
 	wwviaudio_read_ogg_clip(LIGHT_MACHINE_GUN, "sounds/light-machine-gun.ogg");
 	wwviaudio_read_ogg_clip(RIFLE_BURST_FIRE, "sounds/rifle-burst-fire.ogg");
 	wwviaudio_read_ogg_clip(AR15_SHOT, "sounds/ar15-shot.ogg");
+	wwviaudio_read_ogg_clip(GRENADE_EXPLOSION, "sounds/grenade-explosion.ogg");
 }
 
 static void maybe_play_ambient_sounds(Uint32 now)
