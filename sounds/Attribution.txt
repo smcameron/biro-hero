@@ -28,3 +28,6 @@ grenade-bounce-1.ogg, grenade-bounce-2.ogg
 Grenade bouncing by Patrick_Corra
 https://freesound.org/s/466453/ -- License: Attribution 4.0
 
+Penumbra.ogg
+'Penumbra' by Scott Buckley - released under CC-BY 4.0. www.scottbuckley.com.au
+

@@ -270,6 +270,7 @@ const union vec3 GREEN = { { 0.0f, 1.0f, 0.0f } };
 #define GRENADE_EXPLOSION 6
 #define GRENADE_BOUNCE1 7
 #define GRENADE_BOUNCE2 8
+#define PENUMBRA_MUSIC 9
 
 /* George Marsaglia's xorshift PRNG algorithm,
  * see: https://en.wikipedia.org/wiki/Xorshift#Example_implementation
@@ -1870,6 +1871,7 @@ static void setup_audio_system(void)
 	wwviaudio_read_ogg_clip(GRENADE_EXPLOSION, "sounds/grenade-explosion.ogg");
 	wwviaudio_read_ogg_clip(GRENADE_BOUNCE1, "sounds/grenade-bounce-1.ogg");
 	wwviaudio_read_ogg_clip(GRENADE_BOUNCE2, "sounds/grenade-bounce-2.ogg");
+	wwviaudio_read_ogg_clip(PENUMBRA_MUSIC, "sounds/Penumbra.ogg");
 }
 
 static void maybe_play_ambient_sounds(Uint32 now)
@@ -1891,6 +1893,7 @@ int main(__attribute__((unused)) int argc, __attribute__((unused)) char *argv[])
 	}
 
 	setup_audio_system();
+	wwviaudio_play_music(PENUMBRA_MUSIC);
 	if (read_png_files(game.renderer))
 		exit(1);
 	if (read_levels(game.renderer))
