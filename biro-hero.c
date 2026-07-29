@@ -105,6 +105,7 @@ static struct game_object *player;
 #define OBJTYPE_SMOKE8 25
 #define OBJTYPE_SMOKE9 26
 #define OBJTYPE_MUZZLE_FLASH 27
+#define OBJTYPE_MEDICINE_BOX 29
 
 static struct object_type_data {
 	struct image **image;
@@ -181,6 +182,8 @@ struct image smoke[] = {
 	{ "images/smoke8.png", NULL, 0, 0, 0, 0, NULL, },
 	{ "images/smoke9.png", NULL, 0, 0, 0, 0, NULL, },
 };
+struct image health_bar = { "images/health-bar.png", NULL, 0, 0, 0, 0, NULL, };
+struct image medicine_box = { "images/medicine-box.png", NULL, 0, 0, 0, 0, NULL, };
 
 static struct static_object_entry {
 	int level;
@@ -289,6 +292,10 @@ const union vec3 GREEN = { { 0.0f, 1.0f, 0.0f } };
 #define DEATHWISH 16
 #define CARGO200 17
 #define LEAD_POISON 18
+/* End of one liners */
+
+#define THATS_THE_STUFF 19
+#define OWWW 20
 
 /* George Marsaglia's xorshift PRNG algorithm,
  * see: https://en.wikipedia.org/wiki/Xorshift#Example_implementation
@@ -502,6 +509,8 @@ static int read_png_files(SDL_Renderer *renderer)
 	x += load_png_image(renderer, &muzzle_flash_left, IMAGE_MODE_TEXTURE);
 	for (int i = 0; i < 9; i++)
 		x+= load_png_image(renderer, &smoke[i], IMAGE_MODE_TEXTURE);
+	x += load_png_image(renderer, &health_bar, IMAGE_MODE_TEXTURE);
+	x += load_png_image(renderer, &medicine_box, IMAGE_MODE_TEXTURE);
 	return x;
 }
 
@@ -604,6 +613,7 @@ static void player_init(void)
 	player->vx = 0.0f;
 	player->vy = 0.0f;
 	player->shooting = 0;
+	player->hit_points = 255;
 }
 
 static void set_up_level(int l)
@@ -1269,8 +1279,34 @@ static int shoot_at_player_sampler(int x, int y, void *context)
 			mf->throwing_grenade = 0;
 			mf->hit_points = 4;
 		}
-		/* TODO: actually shoot at player */
 		o->next_lookaround_time += 750; /* seen recently, look again sooner. */
+
+		/* Roll for hit */
+		int hitchance = randn(1000);
+		printf("hitchance = %d\n", hitchance);
+		if (hitchance < 333) {
+			/* Roll for damage */
+			int damage = 8 + randn(10);
+			/* harder to actually kill in last moments */
+			if (player->hit_points < 10)
+				damage -= 8;
+			printf("Damage = %d\n", damage);
+			if (damage > 0) {
+				player->hit_points -= damage;
+				if (player->hit_points < 0)
+					player->hit_points = 0;
+				if (randn(100) < 33)
+					wwviaudio_add_sound(OWWW);
+				int xbias = 0;
+				if (x < player->x)
+					xbias = -2.0f;
+				else
+					xbias = 2.0f;
+				add_sparks(damage, OBJTYPE_BLOOD_DROP,
+					player->x, player->y, 2.0f, xbias, 0.0f, 20);
+			}
+		}
+		
 		return -1;
 	}
 	return 0;
@@ -1914,6 +1950,21 @@ static void debug_sampling(void)
 #endif
 }
 
+static void draw_health_bar(SDL_Renderer *renderer)
+{
+	int x1 = (int) (game.window_width * 0.2);
+	int x2 = (int) (game.window_width * 0.8);
+	int y1 = (int) (game.window_height * 0.9);
+	int y2 = (int) (game.window_height * 0.95);
+
+	float health = (float) player->hit_points / 255.0f;
+
+	SDL_Rect destrect = { x1, y1, (int) (health * (x2 - x1)), y2 - y1 };
+	SDL_Rect srcrect = { 0, 0, (int) (health * health_bar.width), health_bar.height };
+	SDL_SetTextureBlendMode(health_bar.texture, SDL_BLENDMODE_MOD);
+	SDL_RenderCopy(renderer, health_bar.texture, &srcrect, &destrect);
+}
+
 /* Render graphics to the screen */
 void render(struct game_state *game)
 {
@@ -1942,6 +1993,8 @@ void render(struct game_state *game)
 			continue;
 		draw_spark(game->renderer, &spark[i]);
 	}
+
+	draw_health_bar(game->renderer);
 
 	union vec3 colors[4];
 	sample_mask_around_object(&go[0], colors);
@@ -2020,6 +2073,8 @@ static void setup_audio_system(void)
 	wwviaudio_read_ogg_clip(DEATHWISH, "sounds/deathwish-granted.ogg");
 	wwviaudio_read_ogg_clip(CARGO200, "sounds/cargo-200.ogg");
 	wwviaudio_read_ogg_clip(LEAD_POISON, "sounds/acute-lead-poisonin.ogg");
+	wwviaudio_read_ogg_clip(THATS_THE_STUFF, "sounds/thats-the-stuff.ogg");
+	wwviaudio_read_ogg_clip(OWWW, "sounds/owww.ogg");
 }
 
 static void maybe_play_ambient_sounds(Uint32 now)
