@@ -68,7 +68,9 @@ static struct game_object {
 	float ticks;
 	float next_animation_tick;
 	int shooting;
+	int throwing_grenade;
 	uint32_t last_shot_time;
+	uint32_t last_grenade_time;
 	int hit_points;
 } go[MAX_GAME_OBJS];
 
@@ -91,6 +93,7 @@ static struct game_object *player;
 #define OBJTYPE_BLOOD_PATCH 14
 #define OBJTYPE_BLOOD_DROP 15
 #define OBJTYPE_DIRT_SPECK 16
+#define OBJTYPE_GRENADE 17
 
 static struct object_type_data {
 	struct image **image;
@@ -153,6 +156,7 @@ struct image blooddrop3 = { "images/blood-drop3.png", NULL, 0, 0, 0, 0, NULL, };
 struct image dirtspeck1 = { "images/dirt-speck1.png", NULL, 0, 0, 0, 0, NULL, };
 struct image dirtspeck2 = { "images/dirt-speck2.png", NULL, 0, 0, 0, 0, NULL, };
 struct image dirtspeck3 = { "images/dirt-speck3.png", NULL, 0, 0, 0, 0, NULL, };
+struct image grenade = { "images/grenade.png", NULL, 0, 0, 0, 0, NULL, };
 
 static struct static_object_entry {
 	int level;
@@ -203,7 +207,7 @@ static struct static_object_entry {
 	{ 0, 2112.0f, 718.0f, OBJTYPE_BARREL, },
 };
 
-#define MAXSPARKS 1000
+#define MAXSPARKS 10000
 
 static struct spark_object {
 	float x, y, vx, vy;
@@ -223,7 +227,7 @@ enum keyaction {
 	keygrenade,
 };
 
-static int keypressed[7] = { 0 }; /* indexed by enum keyaction */
+static int keypressed[8] = { 0 }; /* indexed by enum keyaction */
 
 #define NORTH 0
 #define EAST 1
@@ -425,6 +429,7 @@ static int read_png_files(SDL_Renderer *renderer)
 	x += load_png_image(renderer, &dirtspeck1, IMAGE_MODE_TEXTURE);
 	x += load_png_image(renderer, &dirtspeck2, IMAGE_MODE_TEXTURE);
 	x += load_png_image(renderer, &dirtspeck3, IMAGE_MODE_TEXTURE);
+	x += load_png_image(renderer, &grenade, IMAGE_MODE_TEXTURE);
 	return x;
 }
 
@@ -800,6 +805,14 @@ static void set_up_object_type_data(void)
 	object_type[n].scalex = 1.0;
 	object_type[n].scaley = 1.0;
 	object_type[n].draw = draw_object;
+
+	n = OBJTYPE_GRENADE;
+	object_type[n].image = malloc(1 * sizeof(*object_type[0].image));
+	object_type[n].image[0] = &grenade;
+	object_type[n].nimages = 1;
+	object_type[n].scalex = 1.0;
+	object_type[n].scaley = 1.0;
+	object_type[n].draw = draw_object;
 }
 
 /* Initialize SDL, window, and renderer */
@@ -875,6 +888,9 @@ static void process_keydown(__attribute__((unused)) SDL_Event event)
 	case SDLK_z:
 		keypressed[keyshoot] = 1;
 		break;
+	case SDLK_x:
+		keypressed[keygrenade] = 1;
+		break;
 	case SDLK_r:
 		debug_rects_on = !debug_rects_on;
 		break;
@@ -910,6 +926,9 @@ static void process_keyup(__attribute__((unused)) SDL_Event event)
 		break;
 	case SDLK_z:
 		keypressed[keyshoot] = 0;
+		break;
+	case SDLK_x:
+		keypressed[keygrenade] = 0;
 		break;
 	default:
 		break;
@@ -1184,6 +1203,29 @@ static void move_soldier(struct game_object *o, float delta_time)
 		}
 	}
 }
+static int bullet_shot_sampler(int x, int y, void *context);
+
+#define GRENADE_FUSE_TIME_SECS 1.0
+#define GRENADE_FRAGMENT_COUNT 30
+#define GRENADE_LAUNCH_SPEED 6.0f
+static void move_grenade(struct game_object *o, float delta_time)
+{
+	o->x += o->vx;
+	o->y += o->vy;
+	o->vy += SPARK_GRAVITY;
+	uint32_t now = SDL_GetTicks();
+	if (now > o->next_animation_tick) {
+		/* Explode the grenade */
+		for (int i = 0; i < GRENADE_FRAGMENT_COUNT; i++) {
+			float angle = random_angle_rads();
+			float targetx = o->x + cos(angle) * 1000.0f;
+			float targety = o->y + sin(angle) * 1000.0f;
+			bline(o->x, o->y, targetx, targety, bullet_shot_sampler, o);
+		}
+		snis_object_pool_free_object(game.objpool, o - &go[0]);
+		/* TODO: play grenade explosion sound */
+	}
+}
 
 static void move_objects(float delta_time)
 {
@@ -1194,6 +1236,9 @@ static void move_objects(float delta_time)
 		switch (o->type) {
 		case OBJTYPE_SOLDIER:
 			move_soldier(o, delta_time);
+			break;
+		case OBJTYPE_GRENADE:
+			move_grenade(o, delta_time);
 			break;
 		default:
 			break;
@@ -1267,6 +1312,18 @@ static void player_shoot(struct game_object *o)
 	player->shooting = 1;
 }
 
+static void player_throw_grenade(struct game_object *o)
+{
+	if (player->is_climbing) /* can't shoot from ladder */
+		return;
+	uint32_t now = SDL_GetTicks();
+	if (now - player->last_grenade_time < 1500) /* throttle grenades to 2 per 3 secs */
+		return;
+	player->last_grenade_time = now;
+	/* TODO: Add grenade throwing sound */
+	player->throwing_grenade = 1;
+}
+
 static int bullet_shot_sampler(int x, int y, void *context)
 {
 	struct game_object *shooter = context;
@@ -1335,6 +1392,9 @@ void update(float delta_time)
 	}
 	if (keypressed[keyshoot]) {
 		player_shoot(player);
+	}
+	if (keypressed[keygrenade]) {
+		player_throw_grenade(player);
 	}
 
 	/* Check if the player's center is over a ladder */
@@ -1436,6 +1496,29 @@ void update(float delta_time)
 		targety = player->y + (xorshift(&seed) & 0x03f) - 63;
 		bline(player->x, player->y, targetx, targety, bullet_shot_sampler, player);
 	}
+	if (player->throwing_grenade) {
+		float angle;
+		int i = snis_object_pool_alloc_obj(game.objpool);
+		if (i < 0)
+			goto done;
+		struct game_object *grenade = &go[i];
+		if (player->current_image >= 0 && player->current_image <= 2) /* facing right? */
+			angle = 45.0f * M_PI / 180.0f;
+		else
+			angle = (180.0f - 45.0f) * M_PI / 180.0f;
+		grenade->type = OBJTYPE_GRENADE;
+		grenade->x = player->x;
+		grenade->y = player->y;
+		grenade->vx = GRENADE_LAUNCH_SPEED * cos(angle);
+		grenade->vy = GRENADE_LAUNCH_SPEED * -sin(angle);
+		grenade->next_animation_tick = SDL_GetTicks() + GRENADE_FUSE_TIME_SECS * 1000.0f;
+		grenade->is_climbing = 0;
+		grenade->is_grounded = 0;
+		grenade->current_image = 0;
+		player->throwing_grenade = 0;
+		player->last_grenade_time = SDL_GetTicks();
+	}
+done:
 	move_objects(delta_time);
 	move_sparks(delta_time);
 	reap_dead_soldiers();
