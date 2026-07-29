@@ -762,9 +762,9 @@ static void set_up_object_type_data(void)
 	n = OBJTYPE_DEAD_SOLDIER;
 	object_type[n].image = malloc(4 * sizeof(*object_type[0].image));
 	object_type[n].image[0] = &deadsoldier1;
-	object_type[n].image[1] = &deadsoldier1;
-	object_type[n].image[2] = &deadsoldier1;
-	object_type[n].image[3] = &deadsoldier1;
+	object_type[n].image[1] = &deadsoldier2;
+	object_type[n].image[2] = &deadsoldier3;
+	object_type[n].image[3] = &deadsoldier4;
 	object_type[n].nimages = 4;
 	object_type[n].scalex = 0.18;
 	object_type[n].scaley = 0.18;
