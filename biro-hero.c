@@ -213,6 +213,7 @@ static struct static_object_entry {
 	int type;
 } static_object[] = {
 	{ 0, 450.0f, 700.0f, OBJTYPE_RADAR_CONSOLE, },
+	{ 0, 550.0f, 700.0f, OBJTYPE_MEDICINE_BOX, },
 	{ 0, 150.0f, 590.0f, OBJTYPE_WALLMAP, },
 	{ 0, 130.0f, 680.0f, OBJTYPE_DESK, },
 	{ 0, 1400.0f, 450.0f, OBJTYPE_SHELLS, },
@@ -254,6 +255,9 @@ static struct static_object_entry {
 	{ 0, 2548.0f, 608.0f, OBJTYPE_FLAG, },
 	{ 0, 3952.0f, 540.0f, OBJTYPE_FLAG, },
 	{ 0, 2112.0f, 718.0f, OBJTYPE_BARREL, },
+	{ 0, 1680.0f, 400.0f, OBJTYPE_MEDICINE_BOX, },
+	{ 0, 2620.0f, 686.0f, OBJTYPE_MEDICINE_BOX, },
+	{ 0, 3872.0f, 395.0f, OBJTYPE_MEDICINE_BOX, },
 };
 
 #define MAXSPARKS 10000
@@ -962,6 +966,14 @@ static void set_up_object_type_data(void)
 		object_type[n].scaley = 0.5;
 		object_type[n].draw = draw_object;
 	}
+
+	n = OBJTYPE_MEDICINE_BOX;
+	object_type[n].image = malloc(1 * sizeof(*object_type[0].image));
+	object_type[n].image[0] = &medicine_box;
+	object_type[n].nimages = 1;
+	object_type[n].scalex = 0.3;
+	object_type[n].scaley = 0.3;
+	object_type[n].draw = draw_object;
 }
 
 /* Initialize SDL, window, and renderer */
