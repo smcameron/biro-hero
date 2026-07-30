@@ -44,6 +44,7 @@ struct game_state {
 	struct snis_object_pool *sparkpool;  /* controlls allocation of spark[] */
 	int score;
 	int lives;
+	int soldier_count;
 } game = { 0 };
 
 struct image {
@@ -323,6 +324,7 @@ const union vec3 GREEN = { { 0.0f, 1.0f, 0.0f } };
 #define THATS_THE_STUFF 19
 #define OWWW 20
 #define AK47_SHOT 21
+#define BUNKER_CLEARED 22
 
 /* George Marsaglia's xorshift PRNG algorithm,
  * see: https://en.wikipedia.org/wiki/Xorshift#Example_implementation
@@ -1605,12 +1607,14 @@ static void move_medicine_box(struct game_object *o)
 
 static void move_objects(float delta_time)
 {
+	game.soldier_count = 0;
 	for (int i = 0; i <= snis_object_pool_highest_object(game.objpool); i++) {
 		if (!snis_object_pool_is_allocated(game.objpool, i))
 			continue;
 		struct game_object *o = &go[i];
 		switch (o->type) {
 		case OBJTYPE_SOLDIER:
+			game.soldier_count++;
 			move_soldier(o, delta_time);
 			break;
 		case OBJTYPE_GRENADE:
@@ -1934,6 +1938,12 @@ done:
 	move_objects(delta_time);
 	move_sparks(delta_time);
 	reap_dead_soldiers();
+	static uint32_t last_time_cleared = 0;
+	if (game.soldier_count == 0 &&
+		(SDL_GetTicks() > last_time_cleared + 20000.0 || last_time_cleared == 0 )) {
+			wwviaudio_add_sound(BUNKER_CLEARED);
+			last_time_cleared = SDL_GetTicks();
+	}
 }
 
 static void draw_background_image(SDL_Renderer *renderer)
@@ -2274,6 +2284,7 @@ static void setup_audio_system(void)
 	wwviaudio_read_ogg_clip(THATS_THE_STUFF, "sounds/thats-the-stuff.ogg");
 	wwviaudio_read_ogg_clip(OWWW, "sounds/owww.ogg");
 	wwviaudio_read_ogg_clip(AK47_SHOT, "sounds/ak47.ogg");
+	wwviaudio_read_ogg_clip(BUNKER_CLEARED, "sounds/bunker-cleared.ogg");
 }
 
 static void maybe_play_ambient_sounds(Uint32 now)

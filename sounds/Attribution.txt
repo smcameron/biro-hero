@@ -48,5 +48,7 @@ fertilizer.ogg
 deathwish-granted.ogg
 cargo-200.ogg
 acute-lead-poisonin.ogg
+thats-the-stuff.ogg
+bunker-cleared.ogg
 -------------------------
 
