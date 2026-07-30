@@ -1584,6 +1584,25 @@ static void move_grenade(struct game_object *o, float delta_time)
 	}
 }
 
+static void move_medicine_box(struct game_object *o)
+{
+	if (player->hidden)
+		return;
+
+	if (player->hit_points >= 200)
+		return;
+
+	float dist2 = (o->x - player->x) * (o->x - player->x) +
+			(o->y - player->y) * (o->y - player->y);
+	if (dist2 < 25 * 25) {
+		player->hit_points += 150;
+		if (player->hit_points > 255)
+			player->hit_points = 255;
+		snis_object_pool_free_object(game.objpool, o - &go[0]);
+		wwviaudio_add_sound(THATS_THE_STUFF);
+	}
+}
+
 static void move_objects(float delta_time)
 {
 	for (int i = 0; i <= snis_object_pool_highest_object(game.objpool); i++) {
@@ -1602,6 +1621,9 @@ static void move_objects(float delta_time)
 				o->hit_points--;
 			if (o->hit_points == 0)
 				snis_object_pool_free_object(game.objpool, o - &go[0]);
+			break;
+		case OBJTYPE_MEDICINE_BOX:
+			move_medicine_box(o);
 			break;
 		default:
 			break;
