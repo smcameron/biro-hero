@@ -4,6 +4,7 @@
 #include <stdlib.h>
 #include <dirent.h>
 #include <limits.h>
+#include <string.h>
 
 #include "png_utils.h"
 #include "snis_alloc.h"
@@ -12,6 +13,9 @@
 #include "wwviaudio.h"
 #include "ogg_to_pcm.h"
 #include "bline.h"
+
+/* DIFFICULTY_LEVEL Scales damage */
+#define DIFFICULTY_LEVEL 30.0
 
 #define ARRAYSIZE(x) (int) (sizeof(x) / sizeof((x)[0]))
 
@@ -75,6 +79,7 @@ static struct game_object {
 	uint32_t last_grenade_time;
 	int hit_points;
 	uint32_t next_lookaround_time;
+	int hidden;
 } go[MAX_GAME_OBJS];
 
 static struct game_object *player;
@@ -632,9 +637,10 @@ static void player_init(void)
 		exit(1);
 	}
 	player = &go[i];
+	memset(player, 0, sizeof(*player));
 	player->i = i;
-	player->x = 50;
-	player->y = 0;
+	player->x = 80;
+	player->y = 360;
 	player->type = OBJTYPE_PLAYER;
 	player->ticks = 0.0;
 	player->next_animation_tick = 0.0;
@@ -644,6 +650,7 @@ static void player_init(void)
 	player->vy = 0.0f;
 	player->shooting = 0;
 	player->hit_points = 255;
+	player->hidden = 0;
 }
 
 static void set_up_level(int l)
@@ -658,6 +665,7 @@ static void set_up_level(int l)
 			abort();
 		}
 		struct game_object *o = &go[n];
+		memset(o, 0, sizeof(*o));
 		o->i = n;
 		o->type = static_object[i].type;
 		o->x = static_object[i].x;
@@ -669,6 +677,7 @@ static void set_up_level(int l)
 		o->is_climbing = 0;
 		o->next_animation_tick = 0.0;
 		o->next_lookaround_time = 0;
+		o->hidden = 0;
 		if (o->type == OBJTYPE_SOLDIER) {
 			o->hit_points = 1 + randn(3);
 			o->next_lookaround_time = SDL_GetTicks() + 5000 + o->i * 23;
@@ -718,6 +727,9 @@ static void draw_object(SDL_Renderer *renderer, struct game_object *o)
 	float scy = odt->scaley * windowy_scale;
 	float w = scx * im[i]->width;
 	float h = scy * im[i]->height;
+
+	if (o->hidden)
+		return;
 
 	SDL_Rect destrect = {
 		world_to_screenx(o->x - 0.5 * w),
@@ -994,14 +1006,17 @@ bool init_game(struct game_state *game)
 	return true;
 }
 
-static void reset_game(void)
+static void reset_game(int lives)
 {
 	snis_object_pool_free_all_objects(game.objpool);
 	snis_object_pool_free_all_objects(game.sparkpool);
 	player_init();
 	set_up_level(0);
-	game.lives = 3;
-	game.score = 0;
+	game.lives = lives;
+	if (lives == 3) {
+		game.score = 0;
+		game.mode = GAME_MODE_TITLE_SCREEN; 
+	}
 	game.is_running = true;
 	game.camera_x = 1024.0 / 2.0;
 }
@@ -1087,17 +1102,26 @@ void process_input(struct game_state *game)
 {
 	static int wasted_time = 0;
 
-	if (player->hit_points == 0 && wasted_time == 0)
-		wasted_time = 300;
+	if (player->hit_points == 0 && wasted_time == 0) {
+		wasted_time = 100;
+		player->hidden = 1;
+	}
 	if (wasted_time > 0) {
 		printf("wasted time = %d\n", wasted_time);
 		wasted_time--;
 		if (wasted_time == 0) {
 			player->hit_points = 255;
-			reset_game(); 
-			if (game->lives == 0)
+			reset_game(game->lives); 
+			if (game->lives == 0) {
+				reset_game(3);
 				game->mode = GAME_MODE_TITLE_SCREEN;
+			}
 		}
+
+		/* Eat events during this time. */
+		SDL_Event event;
+		while (SDL_PollEvent(&event)) { (void) 1; }
+
 		return;
 	}
 
@@ -1346,14 +1370,15 @@ static int shoot_at_player_sampler(int x, int y, void *context)
 		printf("hitchance = %d\n", hitchance);
 		if (hitchance < 333) {
 			/* Roll for damage */
-			int damage = 8 + randn(10);
+			int damage = 8 * DIFFICULTY_LEVEL + randn(10 * DIFFICULTY_LEVEL);
 			/* harder to actually kill in last moments */
-			if (player->hit_points < 10)
-				damage -= 8;
+			if (player->hit_points < 10 * DIFFICULTY_LEVEL)
+				damage -= 8 * DIFFICULTY_LEVEL;
 			printf("Damage = %d\n", damage);
 			if (damage > 0) {
-				if (player->hit_points > 0 && player->hit_points - damage <= 0)
+				if (player->hit_points > 0 && player->hit_points - damage <= 0) {
 					game.lives--;
+				}
 				player->hit_points -= damage;
 				if (player->hit_points < 0)
 					player->hit_points = 0;
@@ -1460,14 +1485,18 @@ static void move_soldier(struct game_object *o, float delta_time)
 
 		float dist2 = (o->x - player->x) * (o->x - player->x) +
 				(o->y - player->y) * (o->y - player->y);
-		/* If the player is within 512 units of the soldier, and nearby in y,
-		 * check for a viable shot
-		 */
-		if (dist2 < 512 * 512 && fabsf(player->y - o->y) < 20.0) {
-			/* Check if soldier if facing in player's direction */
-			if ((player->x < o->x && o->vx < 0) ||
-				(player->x > o->x && o->vx > 0))
-				bline(o->x, o->y, player->x, player->y, shoot_at_player_sampler, o);
+
+		if (!player->hidden) {
+			/* If the player is within 512 units of the soldier, and nearby in y,
+			 * check for a viable shot
+			 */
+			if (dist2 < 512 * 512 && fabsf(player->y - o->y) < 20.0) {
+				/* Check if soldier if facing in player's direction */
+				if ((player->x < o->x && o->vx < 0) ||
+					(player->x > o->x && o->vx > 0))
+					bline(o->x, o->y, player->x, player->y,
+							shoot_at_player_sampler, o);
+			}
 		}
 	}
 }
