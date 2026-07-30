@@ -1660,6 +1660,8 @@ void update(float delta_time)
 {
 	int do_player_animation = 0;
 
+	if (game.mode != GAME_MODE_PLAY)
+		return;
 
 	/* Input sets velocity, not direct position */
 	player->vx = 0;
