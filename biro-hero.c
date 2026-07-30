@@ -15,7 +15,7 @@
 #include "bline.h"
 
 /* DIFFICULTY_LEVEL Scales damage */
-#define DIFFICULTY_LEVEL 30.0
+#define DIFFICULTY_LEVEL 5.0
 
 #define ARRAYSIZE(x) (int) (sizeof(x) / sizeof((x)[0]))
 
