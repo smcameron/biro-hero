@@ -39,6 +39,7 @@ struct game_state {
 	struct snis_object_pool *objpool; /* controls allocation of go[] */
 	struct snis_object_pool *sparkpool;  /* controlls allocation of spark[] */
 	int score;
+	int lives;
 } game = { 0 };
 
 struct image {
@@ -199,6 +200,7 @@ struct image digit[] = {
 };
 struct image healthlabel = { "images/healthlabel.png", NULL, 0, 0, 0, 0, NULL };
 struct image scorelabel = { "images/scorelabel.png", NULL, 0, 0, 0, 0, NULL };
+struct image wasted = { "images/wasted.png", NULL, 0, 0, 0, 0, NULL };
 
 static struct static_object_entry {
 	int level;
@@ -538,6 +540,7 @@ static int read_png_files(SDL_Renderer *renderer)
 	x += load_png_image(renderer, &digit[9], IMAGE_MODE_TEXTURE);
 	x += load_png_image(renderer, &healthlabel, IMAGE_MODE_TEXTURE);
 	x += load_png_image(renderer, &scorelabel, IMAGE_MODE_TEXTURE);
+	x += load_png_image(renderer, &wasted, IMAGE_MODE_TEXTURE);
 	return x;
 }
 
@@ -986,8 +989,21 @@ bool init_game(struct game_state *game)
 	player_init();
 	set_up_level(0);
 	game->score = 0;
+	game->lives = 3;
 
 	return true;
+}
+
+static void reset_game(void)
+{
+	snis_object_pool_free_all_objects(game.objpool);
+	snis_object_pool_free_all_objects(game.sparkpool);
+	player_init();
+	set_up_level(0);
+	game.lives = 3;
+	game.score = 0;
+	game.is_running = true;
+	game.camera_x = 1024.0 / 2.0;
 }
 
 static void process_keydown(__attribute__((unused)) SDL_Event event)
@@ -1069,6 +1085,22 @@ static void process_keyup(__attribute__((unused)) SDL_Event event)
 /* Handle input events (keyboard, mouse, window close) */
 void process_input(struct game_state *game)
 {
+	static int wasted_time = 0;
+
+	if (player->hit_points == 0 && wasted_time == 0)
+		wasted_time = 300;
+	if (wasted_time > 0) {
+		printf("wasted time = %d\n", wasted_time);
+		wasted_time--;
+		if (wasted_time == 0) {
+			player->hit_points = 255;
+			reset_game(); 
+			if (game->lives == 0)
+				game->mode = GAME_MODE_TITLE_SCREEN;
+		}
+		return;
+	}
+
 	SDL_Event event;
 	while (SDL_PollEvent(&event)) {
 		switch (event.type) {
@@ -1320,6 +1352,8 @@ static int shoot_at_player_sampler(int x, int y, void *context)
 				damage -= 8;
 			printf("Damage = %d\n", damage);
 			if (damage > 0) {
+				if (player->hit_points > 0 && player->hit_points - damage <= 0)
+					game.lives--;
 				player->hit_points -= damage;
 				if (player->hit_points < 0)
 					player->hit_points = 0;
@@ -2031,6 +2065,31 @@ static void draw_score(SDL_Renderer *renderer)
 	draw_number_at(renderer, x1 + 0.3 * scorelabel.width + 20.0f, y1, game.score);
 }
 
+static void draw_lives(SDL_Renderer *renderer)
+{
+	for (int i = 0; i < game.lives; i++) {
+		int x1 = (int) game.window_width * 0.8f;
+		int y1 = (int) game.window_height * 0.2f;
+
+		SDL_Rect destrect = { x1 + i * 0.3 * 1.1 * hero_right_2.width, y1,
+					0.3 * hero_right_2.width, 0.3 * hero_right_2.height };
+		SDL_SetTextureBlendMode(hero_right_2.texture, SDL_BLENDMODE_MOD);
+		SDL_RenderCopy(renderer, hero_right_2.texture, NULL, &destrect);
+	}
+}
+
+static void draw_wasted(SDL_Renderer *renderer)
+{
+	int x1 = (int) game.window_width * 0.2f;
+	int y1 = (int) game.window_height * 0.2f;
+	int x2 = (int) game.window_width * 0.8f;
+	int y2 = (int) game.window_height * 0.8f;
+
+	SDL_Rect destrect = { x1, y1, x2 - x1, y2 - y1 };
+	SDL_SetTextureBlendMode(wasted.texture, SDL_BLENDMODE_MOD);
+	SDL_RenderCopy(renderer, wasted.texture, NULL, &destrect);
+}
+
 /* Render graphics to the screen */
 void render(struct game_state *game)
 {
@@ -2062,6 +2121,10 @@ void render(struct game_state *game)
 
 	draw_health_bar(game->renderer);
 	draw_score(game->renderer);
+
+	draw_lives(game->renderer);
+	if (player->hit_points == 0)
+		draw_wasted(game->renderer);
 
 	union vec3 colors[4];
 	sample_mask_around_object(&go[0], colors);
