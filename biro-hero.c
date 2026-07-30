@@ -346,6 +346,9 @@ static float random_angle_rads(void)
 
 static int randn(int n)
 {
+	if (n == 0)
+		return 0;
+
 	static uint32_t seed = 0xa5a5a5a5;
 	uint32_t x = xorshift(&seed);
 	x &= 0x7fffffff; /* make sure it's positive */
