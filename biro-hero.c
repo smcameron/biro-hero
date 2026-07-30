@@ -184,6 +184,19 @@ struct image smoke[] = {
 };
 struct image health_bar = { "images/health-bar.png", NULL, 0, 0, 0, 0, NULL, };
 struct image medicine_box = { "images/medicine-box.png", NULL, 0, 0, 0, 0, NULL, };
+struct image digit[] = {
+	{ "images/zero.png", NULL, 0, 0, 0, 0, NULL, },
+	{ "images/one.png", NULL, 0, 0, 0, 0, NULL, },
+	{ "images/two.png", NULL, 0, 0, 0, 0, NULL, },
+	{ "images/three.png", NULL, 0, 0, 0, 0, NULL, },
+	{ "images/four.png", NULL, 0, 0, 0, 0, NULL, },
+	{ "images/five.png", NULL, 0, 0, 0, 0, NULL, },
+	{ "images/six.png", NULL, 0, 0, 0, 0, NULL, },
+	{ "images/seven.png", NULL, 0, 0, 0, 0, NULL, },
+	{ "images/eight.png", NULL, 0, 0, 0, 0, NULL, },
+	{ "images/nine.png", NULL, 0, 0, 0, 0, NULL, },
+};
+struct image healthlabel = { "images/healthlabel.png", NULL, 0, 0, 0, 0, NULL };
 
 static struct static_object_entry {
 	int level;
@@ -511,6 +524,17 @@ static int read_png_files(SDL_Renderer *renderer)
 		x+= load_png_image(renderer, &smoke[i], IMAGE_MODE_TEXTURE);
 	x += load_png_image(renderer, &health_bar, IMAGE_MODE_TEXTURE);
 	x += load_png_image(renderer, &medicine_box, IMAGE_MODE_TEXTURE);
+	x += load_png_image(renderer, &digit[0], IMAGE_MODE_TEXTURE);
+	x += load_png_image(renderer, &digit[1], IMAGE_MODE_TEXTURE);
+	x += load_png_image(renderer, &digit[2], IMAGE_MODE_TEXTURE);
+	x += load_png_image(renderer, &digit[3], IMAGE_MODE_TEXTURE);
+	x += load_png_image(renderer, &digit[4], IMAGE_MODE_TEXTURE);
+	x += load_png_image(renderer, &digit[5], IMAGE_MODE_TEXTURE);
+	x += load_png_image(renderer, &digit[6], IMAGE_MODE_TEXTURE);
+	x += load_png_image(renderer, &digit[7], IMAGE_MODE_TEXTURE);
+	x += load_png_image(renderer, &digit[8], IMAGE_MODE_TEXTURE);
+	x += load_png_image(renderer, &digit[9], IMAGE_MODE_TEXTURE);
+	x += load_png_image(renderer, &healthlabel, IMAGE_MODE_TEXTURE);
 	return x;
 }
 
@@ -1950,6 +1974,23 @@ static void debug_sampling(void)
 #endif
 }
 
+static void draw_number_at(SDL_Renderer *renderer, int x, int y, int number)
+{
+	char buffer[100];
+
+	snprintf(buffer, sizeof(buffer), "%d", number);
+
+	for (int i = 0; buffer[i]; i++) {
+		if (buffer[i] < '0' || buffer[i] > '9')
+			continue;
+		int n = buffer[i] - '0';
+		SDL_Rect destrect = { x, y, digit[n].width, digit[i].height };
+		SDL_SetTextureBlendMode(digit[n].texture, SDL_BLENDMODE_MOD);
+		SDL_RenderCopy(renderer, digit[n].texture, NULL, &destrect);
+		x += digit[n].width;
+	}
+}
+
 static void draw_health_bar(SDL_Renderer *renderer)
 {
 	int x1 = (int) (game.window_width * 0.2);
@@ -1963,6 +2004,13 @@ static void draw_health_bar(SDL_Renderer *renderer)
 	SDL_Rect srcrect = { 0, 0, (int) (health * health_bar.width), health_bar.height };
 	SDL_SetTextureBlendMode(health_bar.texture, SDL_BLENDMODE_MOD);
 	SDL_RenderCopy(renderer, health_bar.texture, &srcrect, &destrect);
+	draw_number_at(renderer, x1 + health * (x2 - x1) + 20, y1, (int) (100.0f * health));
+
+	x1 = (int) (game.window_width * 0.05);
+	SDL_Rect hldest = { x1, y1, 0.3 * healthlabel.width, 0.3 * healthlabel.height };
+	SDL_SetTextureBlendMode(healthlabel.texture, SDL_BLENDMODE_MOD);
+	SDL_RenderCopy(renderer, healthlabel.texture, NULL, &hldest);
+	
 }
 
 /* Render graphics to the screen */
