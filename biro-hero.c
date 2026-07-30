@@ -276,6 +276,20 @@ const union vec3 GREEN = { { 0.0f, 1.0f, 0.0f } };
 #define GRENADE_BOUNCE2 8
 #define PENUMBRA_MUSIC 9
 
+
+/* one liners */
+#define FIRST_ONE_LINER 10
+#define LAST_ONE_LINER 18
+#define TALKIN_BOUT 10
+#define SPRUNG_A_LEAK 11
+#define SHOUDA_STAYED_HOME 12
+#define SUX_2_B_U 13
+#define JUST_DESSERTS 14
+#define FERTILIZER 15
+#define DEATHWISH 16
+#define CARGO200 17
+#define LEAD_POISON 18
+
 /* George Marsaglia's xorshift PRNG algorithm,
  * see: https://en.wikipedia.org/wiki/Xorshift#Example_implementation
  *
@@ -1201,6 +1215,22 @@ void apply_gravity_and_vertical_movement(struct game_object *o, float delta_time
 	}
 }
 
+static void pithy_one_liner(void) /* Hopefully pithy anyway.  Maybe just stupid. */
+{
+	static uint32_t last_one = 0;
+
+	printf("pithy one liner\n");
+	uint32_t now = SDL_GetTicks();
+	if (now < last_one + 5000) { /* No more than 1 one liner per 5 seconds */
+		printf("POL bailing\n");
+		return;
+	}
+	last_one = now;
+	int n = randn(LAST_ONE_LINER - FIRST_ONE_LINER) + FIRST_ONE_LINER;
+	printf("POL Playing sound %d\n", n);
+	wwviaudio_add_sound(n);
+}
+
 static int shoot_at_player_sampler(int x, int y, void *context)
 {
 	/* Soldier is looking around to see if the player is shootable */
@@ -1469,6 +1499,8 @@ static void reap_dead_soldier(struct game_object *o)
 	body->is_climbing = 0;
 
 get_rid_of_soldier:
+	if (randn(100) < 33)
+		pithy_one_liner();
 	snis_object_pool_free_object(game.objpool, o - &go[0]);
 }
 
@@ -1979,6 +2011,15 @@ static void setup_audio_system(void)
 	wwviaudio_read_ogg_clip(GRENADE_BOUNCE1, "sounds/grenade-bounce-1.ogg");
 	wwviaudio_read_ogg_clip(GRENADE_BOUNCE2, "sounds/grenade-bounce-2.ogg");
 	wwviaudio_read_ogg_clip(PENUMBRA_MUSIC, "sounds/Penumbra.ogg");
+	wwviaudio_read_ogg_clip(TALKIN_BOUT, "sounds/what-im-talkin-about.ogg");
+	wwviaudio_read_ogg_clip(SPRUNG_A_LEAK, "sounds/sprung-a-leak.ogg");
+	wwviaudio_read_ogg_clip(SHOUDA_STAYED_HOME, "sounds/shouda-stayed-home.ogg");
+	wwviaudio_read_ogg_clip(SUX_2_B_U, "sounds/sux-to-be-u.ogg");
+	wwviaudio_read_ogg_clip(JUST_DESSERTS, "sounds/just-desserts.ogg");
+	wwviaudio_read_ogg_clip(FERTILIZER, "sounds/fertilizer.ogg");
+	wwviaudio_read_ogg_clip(DEATHWISH, "sounds/deathwish-granted.ogg");
+	wwviaudio_read_ogg_clip(CARGO200, "sounds/cargo-200.ogg");
+	wwviaudio_read_ogg_clip(LEAD_POISON, "sounds/acute-lead-poisonin.ogg");
 }
 
 static void maybe_play_ambient_sounds(Uint32 now)
