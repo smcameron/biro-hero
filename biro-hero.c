@@ -38,6 +38,7 @@ struct game_state {
 	int window_width, window_height;
 	struct snis_object_pool *objpool; /* controls allocation of go[] */
 	struct snis_object_pool *sparkpool;  /* controlls allocation of spark[] */
+	int score;
 } game = { 0 };
 
 struct image {
@@ -197,6 +198,7 @@ struct image digit[] = {
 	{ "images/nine.png", NULL, 0, 0, 0, 0, NULL, },
 };
 struct image healthlabel = { "images/healthlabel.png", NULL, 0, 0, 0, 0, NULL };
+struct image scorelabel = { "images/scorelabel.png", NULL, 0, 0, 0, 0, NULL };
 
 static struct static_object_entry {
 	int level;
@@ -535,6 +537,7 @@ static int read_png_files(SDL_Renderer *renderer)
 	x += load_png_image(renderer, &digit[8], IMAGE_MODE_TEXTURE);
 	x += load_png_image(renderer, &digit[9], IMAGE_MODE_TEXTURE);
 	x += load_png_image(renderer, &healthlabel, IMAGE_MODE_TEXTURE);
+	x += load_png_image(renderer, &scorelabel, IMAGE_MODE_TEXTURE);
 	return x;
 }
 
@@ -982,6 +985,7 @@ bool init_game(struct game_state *game)
 	snis_object_pool_setup(&game->sparkpool, MAXSPARKS);
 	player_init();
 	set_up_level(0);
+	game->score = 0;
 
 	return true;
 }
@@ -1562,6 +1566,7 @@ get_rid_of_soldier:
 	if (randn(100) < 33)
 		pithy_one_liner();
 	snis_object_pool_free_object(game.objpool, o - &go[0]);
+	game.score += 200;
 }
 
 static void reap_dead_soldiers(void)
@@ -2013,6 +2018,17 @@ static void draw_health_bar(SDL_Renderer *renderer)
 	
 }
 
+static void draw_score(SDL_Renderer *renderer)
+{
+	int x1 = (int) game.window_width * 0.05f;
+	int y1 = (int) game.window_height * 0.18f;
+
+	SDL_Rect destrect = { x1, y1, 0.3 * scorelabel.width, 0.3 * scorelabel.height };
+	SDL_SetTextureBlendMode(scorelabel.texture, SDL_BLENDMODE_MOD);
+	SDL_RenderCopy(renderer, scorelabel.texture, NULL, &destrect);
+	draw_number_at(renderer, x1 + 0.3 * scorelabel.width + 20.0f, y1, game.score);
+}
+
 /* Render graphics to the screen */
 void render(struct game_state *game)
 {
@@ -2043,6 +2059,7 @@ void render(struct game_state *game)
 	}
 
 	draw_health_bar(game->renderer);
+	draw_score(game->renderer);
 
 	union vec3 colors[4];
 	sample_mask_around_object(&go[0], colors);
