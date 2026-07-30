@@ -318,6 +318,7 @@ const union vec3 GREEN = { { 0.0f, 1.0f, 0.0f } };
 
 #define THATS_THE_STUFF 19
 #define OWWW 20
+#define AK47_SHOT 21
 
 /* George Marsaglia's xorshift PRNG algorithm,
  * see: https://en.wikipedia.org/wiki/Xorshift#Example_implementation
@@ -1341,7 +1342,7 @@ static int shoot_at_player_sampler(int x, int y, void *context)
 			(y - player->y) * (y - player->y);
 	if (dist2 < 20*20) { /* We can see the player */
 		o->last_shot_time = now;
-		wwviaudio_add_sound(AR15_SHOT);
+		wwviaudio_add_sound(AK47_SHOT);
 		int n = snis_object_pool_alloc_obj(game.objpool);
 		if (n >= 0) {
 			struct game_object *mf = &go[n];
@@ -2234,6 +2235,7 @@ static void setup_audio_system(void)
 	wwviaudio_read_ogg_clip(LEAD_POISON, "sounds/acute-lead-poisonin.ogg");
 	wwviaudio_read_ogg_clip(THATS_THE_STUFF, "sounds/thats-the-stuff.ogg");
 	wwviaudio_read_ogg_clip(OWWW, "sounds/owww.ogg");
+	wwviaudio_read_ogg_clip(AK47_SHOT, "sounds/ak47.ogg");
 }
 
 static void maybe_play_ambient_sounds(Uint32 now)
