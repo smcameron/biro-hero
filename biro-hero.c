@@ -1020,6 +1020,7 @@ static void reset_game(int lives)
 	}
 	game.is_running = true;
 	game.camera_x = 1024.0 / 2.0;
+	memset(keypressed, 0, sizeof(keypressed));
 }
 
 static void process_keydown(__attribute__((unused)) SDL_Event event)
