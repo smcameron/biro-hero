@@ -31,6 +31,7 @@
 #define MENU_HEIGHT 80
 #define MENU_ITEM_WIDTH 80
 
+static int menu_item_count = 0; /* filled in by set_up_object_type_data */
 static int menu_is_visible = 0;
 static int dragged_object_index = -1;
 static int dragging_camera = 0;
@@ -130,6 +131,7 @@ static struct object_type_data {
 	float scalex, scaley;
 	void (*draw)(SDL_Renderer *renderer, struct game_object *o);
 	char *name;
+	int on_menu;
 } object_type[NUM_OBJECT_TYPES] = { 0 };
 
 #define MAX_LEVELS 3
@@ -887,6 +889,8 @@ static void set_up_object_type_data(void)
 	object_type[n].scalex = 0.25;
 	object_type[n].scaley = 0.25;
 	object_type[n].draw = draw_object;
+	object_type[n].on_menu = 0;
+
 
 	n = OBJTYPE_WALLMAP;
 	object_type[n].name = "wallmap";
@@ -896,6 +900,7 @@ static void set_up_object_type_data(void)
 	object_type[n].scalex = 0.18;
 	object_type[n].scaley = 0.18;
 	object_type[n].draw = draw_object;
+	object_type[n].on_menu = 1;
 
 	n = OBJTYPE_DESK;
 	object_type[n].name = "desk";
@@ -905,6 +910,7 @@ static void set_up_object_type_data(void)
 	object_type[n].scalex = 0.15;
 	object_type[n].scaley = 0.15;
 	object_type[n].draw = draw_object;
+	object_type[n].on_menu = 1;
 
 	n = OBJTYPE_RADAR_CONSOLE;
 	object_type[n].name = "radar_console";
@@ -914,6 +920,7 @@ static void set_up_object_type_data(void)
 	object_type[n].scalex = 0.20;
 	object_type[n].scaley = 0.20;
 	object_type[n].draw = draw_object;
+	object_type[n].on_menu = 1;
 
 	n = OBJTYPE_SHELLS;
 	object_type[n].name = "shells";
@@ -923,6 +930,7 @@ static void set_up_object_type_data(void)
 	object_type[n].scalex = 0.15;
 	object_type[n].scaley = 0.15;
 	object_type[n].draw = draw_object;
+	object_type[n].on_menu = 1;
 
 	n = OBJTYPE_BED;
 	object_type[n].name = "bed";
@@ -932,6 +940,7 @@ static void set_up_object_type_data(void)
 	object_type[n].scalex = 0.25;
 	object_type[n].scaley = 0.25;
 	object_type[n].draw = draw_object;
+	object_type[n].on_menu = 1;
 
 	n = OBJTYPE_CRATES;
 	object_type[n].name = "crates";
@@ -941,6 +950,7 @@ static void set_up_object_type_data(void)
 	object_type[n].scalex = 0.65;
 	object_type[n].scaley = 0.65;
 	object_type[n].draw = draw_object;
+	object_type[n].on_menu = 1;
 
 	n = OBJTYPE_DIRTCLOD;
 	object_type[n].name = "dirtclod";
@@ -953,6 +963,7 @@ static void set_up_object_type_data(void)
 	object_type[n].scalex = 0.3;
 	object_type[n].scaley = 0.3;
 	object_type[n].draw = draw_object;
+	object_type[n].on_menu = 0;
 
 	n = OBJTYPE_SOLDIER;
 	object_type[n].name = "soldier";
@@ -965,6 +976,7 @@ static void set_up_object_type_data(void)
 	object_type[n].scalex = 0.18;
 	object_type[n].scaley = 0.18;
 	object_type[n].draw = draw_object;
+	object_type[n].on_menu = 1;
 
 	n = OBJTYPE_BARREL;
 	object_type[n].name = "barrel";
@@ -974,6 +986,7 @@ static void set_up_object_type_data(void)
 	object_type[n].scalex = 0.18;
 	object_type[n].scaley = 0.18;
 	object_type[n].draw = draw_object;
+	object_type[n].on_menu = 1;
 
 	n = OBJTYPE_TNT;
 	object_type[n].name = "tnt";
@@ -983,6 +996,7 @@ static void set_up_object_type_data(void)
 	object_type[n].scalex = 0.18;
 	object_type[n].scaley = 0.18;
 	object_type[n].draw = draw_object;
+	object_type[n].on_menu = 1;
 
 	n = OBJTYPE_AMMO;
 	object_type[n].name = "ammo";
@@ -992,6 +1006,7 @@ static void set_up_object_type_data(void)
 	object_type[n].scalex = 0.13;
 	object_type[n].scaley = 0.13;
 	object_type[n].draw = draw_object;
+	object_type[n].on_menu = 1;
 
 	n = OBJTYPE_FLAG;
 	object_type[n].name = "flag";
@@ -1001,6 +1016,7 @@ static void set_up_object_type_data(void)
 	object_type[n].scalex = 0.35;
 	object_type[n].scaley = 0.35;
 	object_type[n].draw = draw_object;
+	object_type[n].on_menu = 1;
 
 	n = OBJTYPE_DEAD_SOLDIER;
 	object_type[n].name = "body";
@@ -1013,6 +1029,7 @@ static void set_up_object_type_data(void)
 	object_type[n].scalex = 0.18;
 	object_type[n].scaley = 0.18;
 	object_type[n].draw = draw_object;
+	object_type[n].on_menu = 1;
 
 	n = OBJTYPE_BLOOD_PATCH;
 	object_type[n].name = "blood_patch";
@@ -1025,6 +1042,7 @@ static void set_up_object_type_data(void)
 	object_type[n].scalex = 0.18;
 	object_type[n].scaley = 0.18;
 	object_type[n].draw = draw_object;
+	object_type[n].on_menu = 0;
 
 	n = OBJTYPE_BLOOD_DROP;
 	object_type[n].name = "blood_drop";
@@ -1036,6 +1054,7 @@ static void set_up_object_type_data(void)
 	object_type[n].scalex = 1.0;
 	object_type[n].scaley = 1.0;
 	object_type[n].draw = draw_object;
+	object_type[n].on_menu = 0;
 
 	n = OBJTYPE_DIRT_SPECK;
 	object_type[n].name = "dirt_speck";
@@ -1047,6 +1066,7 @@ static void set_up_object_type_data(void)
 	object_type[n].scalex = 1.0;
 	object_type[n].scaley = 1.0;
 	object_type[n].draw = draw_object;
+	object_type[n].on_menu = 0;
 
 	n = OBJTYPE_GRENADE;
 	object_type[n].name = "grenade";
@@ -1056,6 +1076,7 @@ static void set_up_object_type_data(void)
 	object_type[n].scalex = 1.0;
 	object_type[n].scaley = 1.0;
 	object_type[n].draw = draw_object;
+	object_type[n].on_menu = 0;
 
 	n = OBJTYPE_MUZZLE_FLASH;
 	object_type[n].name = "muzzle_flash";
@@ -1066,8 +1087,9 @@ static void set_up_object_type_data(void)
 	object_type[n].scalex = 0.3;
 	object_type[n].scaley = 0.3;
 	object_type[n].draw = draw_object;
+	object_type[n].on_menu = 0;
 
-	const char *smokename[] = {
+	char *smokename[] = {
 		"smoke1",
 		"smoke2",
 		"smoke3",
@@ -1086,6 +1108,7 @@ static void set_up_object_type_data(void)
 		object_type[n].scalex = 0.5;
 		object_type[n].scaley = 0.5;
 		object_type[n].draw = draw_object;
+		object_type[n].on_menu = 0;
 	}
 
 	n = OBJTYPE_MEDICINE_BOX;
@@ -1096,6 +1119,14 @@ static void set_up_object_type_data(void)
 	object_type[n].scalex = 0.3;
 	object_type[n].scaley = 0.3;
 	object_type[n].draw = draw_object;
+	object_type[n].on_menu = 1;
+
+	/* Count menu items */
+	menu_item_count = 0;
+	for (int i = 0; i < NUM_OBJECT_TYPES; i++) {
+		if (object_type[i].on_menu)
+			menu_item_count++;
+	}
 }
 
 /* Initialize SDL, window, and renderer */
@@ -1243,6 +1274,19 @@ static void process_keyup(__attribute__((unused)) SDL_Event event)
 	}
 }
 
+int menu_item_index_to_type(int index)
+{
+	int x = 0;
+	for (int i = 0; i < NUM_OBJECT_TYPES; i++) {
+		if (object_type[i].on_menu) {
+			if (x == index)
+				return i;
+			x++;
+		}
+	}
+	return -1;
+}
+
 /* Handle input events (keyboard, mouse, window close) */
 void process_input(struct game_state *game)
 {
@@ -1307,7 +1351,7 @@ void process_input(struct game_state *game)
 			if (game->mode == GAME_MODE_EDIT) {
 				/* Reveal menu if mouse is at the top of the screen */
 				menu_is_visible =
-					(event.motion.y < MENU_HEIGHT * ((1 + NUM_OBJECT_TYPES) / 10));
+					(event.motion.y < MENU_HEIGHT * (menu_item_count / 10));
 
 				if (dragged_object_index >= 0) {
 					go[dragged_object_index].x = screen_to_worldx(event.motion.x);
@@ -1334,22 +1378,28 @@ void process_input(struct game_state *game)
 			if (event.button.button == SDL_BUTTON_LEFT) {
 				/* Intercept click if menu is visible and clicked */
 				if (menu_is_visible && event.button.y <
-						MENU_HEIGHT * (NUM_OBJECT_TYPES + 1) / 10) {
+						MENU_HEIGHT * (menu_item_count / 10)) {
 					int clicked_row = event.button.y / MENU_HEIGHT;
 					int clicked_index = clicked_row * 10 +
 							event.button.x / MENU_ITEM_WIDTH;
 
-					if (clicked_index < NUM_OBJECT_TYPES) {
+					if (clicked_index < menu_item_count) {
 						/* Clicked an object: Spawn it and attach it to the mouse */
 						int new_obj = snis_object_pool_alloc_obj(game->objpool);
 						if (new_obj >= 0) {
-							go[new_obj].type = clicked_index;
+							int t = menu_item_index_to_type(clicked_index);
+							if (t < 0) {
+								printf("fatal error,"
+								" failed to look up menu item\n");
+								abort();
+							}
+							go[new_obj].type = t;
 							go[new_obj].current_image = 0;
 							go[new_obj].x = screen_to_worldx(event.button.x);
 							go[new_obj].y = screen_to_worldy(event.button.y);
 							dragged_object_index = new_obj; /* Immediately start dragging */
 						}
-					} else if (clicked_index == NUM_OBJECT_TYPES) {
+					} else if (clicked_index == menu_item_count) {
 						/* Clicked the slot just after the last object type: Save */
 						save_level_items("custom_level.txt", game);
 					}
@@ -2400,15 +2450,18 @@ void draw_edit_menu(SDL_Renderer *renderer)
 	SDL_RenderFillRect(renderer, &menu_bg);
 
 	/* Draw available objects as icons */
+	int idx = 0;
 	for (int i = 0; i < NUM_OBJECT_TYPES; i++) {
 		struct object_type_data *odt = &object_type[i];
+		if (!odt->on_menu)
+			continue;
 
-		int row = i / 10;
+		int row = idx / 10;
 		/* Define the destination rectangle for the icon */
 		SDL_Rect dest;
 		dest.w = 70; /* Scale icons down to fit nicely */
 		dest.h = 70;
-		dest.x = ((i % 10) * MENU_ITEM_WIDTH) + (MENU_ITEM_WIDTH / 2) - (dest.w / 2);
+		dest.x = ((idx % 10) * MENU_ITEM_WIDTH) + (MENU_ITEM_WIDTH / 2) - (dest.w / 2);
 		dest.y = row * 80 + (MENU_HEIGHT / 2) - (dest.h / 2);
 
 		/* Render the first frame of the object's animation */
@@ -2419,12 +2472,14 @@ void draw_edit_menu(SDL_Renderer *renderer)
 
 		/* Draw a subtle separator line */
 		SDL_SetRenderDrawColor(renderer, 100, 100, 100, 255);
-		SDL_RenderDrawLine(renderer, (i + 1) * MENU_ITEM_WIDTH, 0, (i + 1) * MENU_ITEM_WIDTH, MENU_HEIGHT);
+		SDL_RenderDrawLine(renderer, (idx + 1) * MENU_ITEM_WIDTH, 0, (idx + 1) * MENU_ITEM_WIDTH, MENU_HEIGHT);
+		idx++;
 	}
 
 	/* Draw a mock "Save" Button (A simple red square as an icon) */
-	int row = NUM_OBJECT_TYPES / 10;
-	int save_slot_x = (NUM_OBJECT_TYPES % 10) * MENU_ITEM_WIDTH;
+	int row = menu_item_count / 10;
+	int save_slot_x = (menu_item_count % 10) * MENU_ITEM_WIDTH;
+
 	SDL_Rect save_btn = { save_slot_x + 5, row * 80, 70, 70 };
 	SDL_SetRenderDrawColor(renderer, 200, 0, 0, 255); /* Red for save */
 	SDL_RenderFillRect(renderer, &save_btn);
