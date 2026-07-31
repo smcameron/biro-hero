@@ -30,6 +30,7 @@
 #define GAME_MODE_EDIT 2
 #define MENU_HEIGHT 80
 #define MENU_ITEM_WIDTH 80
+#define MENU_ITEMS_PER_ROW 15
 
 static int menu_item_count = 0; /* filled in by set_up_object_type_data */
 static int menu_is_visible = 0;
@@ -1352,7 +1353,7 @@ void process_input(struct game_state *game)
 				/* Reveal menu if mouse is at the top of the screen */
 				menu_is_visible =
 					(event.motion.y < MENU_HEIGHT *
-						(1 + ((menu_item_count + 1) / 10)));
+						(1 + ((menu_item_count + 1) / MENU_ITEMS_PER_ROW)));
 
 				if (dragged_object_index >= 0) {
 					go[dragged_object_index].x = screen_to_worldx(event.motion.x);
@@ -1379,9 +1380,9 @@ void process_input(struct game_state *game)
 			if (event.button.button == SDL_BUTTON_LEFT) {
 				/* Intercept click if menu is visible and clicked */
 				if (menu_is_visible && event.button.y <
-						MENU_HEIGHT * (1 + (1 + menu_item_count) / 10)) {
+						MENU_HEIGHT * (1 + (1 + menu_item_count) / MENU_ITEMS_PER_ROW)) {
 					int clicked_row = event.button.y / MENU_HEIGHT;
-					int clicked_index = clicked_row * 10 +
+					int clicked_index = clicked_row * MENU_ITEMS_PER_ROW +
 							event.button.x / MENU_ITEM_WIDTH;
 
 					if (clicked_index < menu_item_count) {
@@ -2448,7 +2449,8 @@ void draw_edit_menu(SDL_Renderer *renderer)
 	/* Draw a semi-transparent background for the menu */
 	SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
 	SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
-	SDL_Rect menu_bg = {0, 0, game.window_width, (1 + (menu_item_count + 1) / 10) * MENU_HEIGHT};
+	SDL_Rect menu_bg = {0, 0, game.window_width,
+		(1 + (menu_item_count + 1) / MENU_ITEMS_PER_ROW) * MENU_HEIGHT};
 	SDL_RenderFillRect(renderer, &menu_bg);
 
 	/* Draw available objects as icons */
@@ -2458,12 +2460,13 @@ void draw_edit_menu(SDL_Renderer *renderer)
 		if (!odt->on_menu)
 			continue;
 
-		int row = idx / 10;
+		int row = idx / MENU_ITEMS_PER_ROW;
 		/* Define the destination rectangle for the icon */
 		SDL_Rect dest;
 		dest.w = 70; /* Scale icons down to fit nicely */
 		dest.h = 70;
-		dest.x = ((idx % 10) * MENU_ITEM_WIDTH) + (MENU_ITEM_WIDTH / 2) - (dest.w / 2);
+		dest.x = ((idx % MENU_ITEMS_PER_ROW) * MENU_ITEM_WIDTH) +
+				(MENU_ITEM_WIDTH / 2) - (dest.w / 2);
 		dest.y = row * 80 + (MENU_HEIGHT / 2) - (dest.h / 2);
 
 		/* Render the first frame of the object's animation */
@@ -2480,8 +2483,8 @@ void draw_edit_menu(SDL_Renderer *renderer)
 	}
 
 	/* Draw a mock "Save" Button (A simple red square as an icon) */
-	int row = menu_item_count / 10;
-	int save_slot_x = (menu_item_count % 10) * MENU_ITEM_WIDTH;
+	int row = menu_item_count / MENU_ITEMS_PER_ROW;
+	int save_slot_x = (menu_item_count % MENU_ITEMS_PER_ROW) * MENU_ITEM_WIDTH;
 
 	SDL_Rect save_btn = { save_slot_x + 5, row * 80, 70, 70 };
 	SDL_SetRenderDrawColor(renderer, 200, 0, 0, 255); /* Red for save */
