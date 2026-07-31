@@ -1350,7 +1350,7 @@ static int shoot_at_player_sampler(int x, int y, void *context)
 	struct game_object *o = context;
 
 	uint32_t now = SDL_GetTicks();
-	if (now - o->last_shot_time < 333) /* throttle shots to 3 / sec */
+	if (now - o->last_shot_time < 200) /* throttle shots to 5 / sec */
 		return -1;
 	if (o->type != OBJTYPE_SOLDIER)
 		return -1;
@@ -1382,7 +1382,7 @@ static int shoot_at_player_sampler(int x, int y, void *context)
 			mf->throwing_grenade = 0;
 			mf->hit_points = 4;
 		}
-		o->next_lookaround_time += 750; /* seen recently, look again sooner. */
+		o->next_lookaround_time += 250; /* seen recently, look again sooner. */
 
 		/* Roll for hit */
 		int hitchance = randn(1000);
@@ -1499,8 +1499,8 @@ static void move_soldier(struct game_object *o, float delta_time)
 		}
 	}
 
-	if (o->next_lookaround_time > SDL_GetTicks()) {
-		o->next_lookaround_time += 2000;
+	if (o->next_lookaround_time < SDL_GetTicks()) {
+		o->next_lookaround_time += 500;
 
 		float dist2 = (o->x - player->x) * (o->x - player->x) +
 				(o->y - player->y) * (o->y - player->y);
@@ -1509,7 +1509,7 @@ static void move_soldier(struct game_object *o, float delta_time)
 			/* If the player is within 512 units of the soldier, and nearby in y,
 			 * check for a viable shot
 			 */
-			if (dist2 < 512 * 512 && fabsf(player->y - o->y) < 20.0) {
+			if (dist2 < 512 * 512 && fabsf(player->y - o->y) < 30.0) {
 				/* Check if soldier if facing in player's direction */
 				if ((player->x < o->x && o->vx < 0) ||
 					(player->x > o->x && o->vx > 0))
