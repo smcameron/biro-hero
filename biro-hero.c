@@ -28,7 +28,10 @@
 #define GAME_MODE_TITLE_SCREEN 0
 #define GAME_MODE_PLAY 1
 #define GAME_MODE_EDIT 2
+#define MENU_HEIGHT 80
+#define MENU_ITEM_WIDTH 80
 
+static int menu_is_visible = 0;
 static int dragged_object_index = -1;
 static int dragging_camera = 0;
 static int last_mouse_x = 0;
@@ -90,7 +93,6 @@ static struct game_object {
 } go[MAX_GAME_OBJS];
 
 static struct game_object *player;
-#define MAX_OBJECT_TYPES 50
 #define OBJTYPE_PLAYER 0
 #define OBJTYPE_WALLMAP 1
 #define OBJTYPE_DESK 2
@@ -120,6 +122,7 @@ static struct game_object *player;
 #define OBJTYPE_SMOKE9 26
 #define OBJTYPE_MUZZLE_FLASH 27
 #define OBJTYPE_MEDICINE_BOX 28
+#define NUM_OBJECT_TYPES 29
 
 static const struct obj_type_name_entry {
 	char *name;
@@ -161,7 +164,7 @@ static struct object_type_data {
 	int nimages;
 	float scalex, scaley;
 	void (*draw)(SDL_Renderer *renderer, struct game_object *o);
-} object_type[MAX_OBJECT_TYPES] = { 0 };
+} object_type[NUM_OBJECT_TYPES] = { 0 };
 
 #define MAX_LEVELS 3
 #define MAX_SCREENS_PER_LEVEL 10
@@ -679,6 +682,30 @@ static void player_init(void)
 	player->shooting = 0;
 	player->hit_points = 255;
 	player->hidden = 0;
+}
+
+void save_level_items(const char *filename, struct game_state *game)
+{
+	FILE *f = fopen(filename, "w");
+	if (!f) {
+		printf("Error: Could not open %s for saving.\n", filename);
+		return;
+	}
+
+	fprintf(f, "level: %d\n", 1);
+	for (int i = 0; i <= snis_object_pool_highest_object(game->objpool); i++) {
+		if (!snis_object_pool_is_allocated(game->objpool, i))
+			continue;
+
+		struct game_object *o = &go[i];
+		/* Skip objects you don't want saved, like the player, if applicable */
+		if (o->type == OBJTYPE_PLAYER)
+			continue;
+		fprintf(f, "	%f %f %s\n", o->x, o->y, obj_type_name[o->type].name);
+	}
+
+	fclose(f);
+	printf("Level saved successfully to %s\n", filename);
 }
 
 static int read_level_items(char *filename)
@@ -1271,18 +1298,6 @@ void process_input(struct game_state *game)
 		case SDL_KEYUP:
 			process_keyup(event);
 			break;
-		case SDL_MOUSEBUTTONDOWN:
-			if (game->mode == GAME_MODE_EDIT) {
-				if (event.button.button == SDL_BUTTON_LEFT) {
-					float wx = screen_to_worldx(event.button.x);
-					float wy = screen_to_worldy(event.button.y);
-					dragged_object_index = find_object_at(wx, wy);
-				} else if (event.button.button == SDL_BUTTON_RIGHT) {
-					dragging_camera = 1;
-					last_mouse_x = event.button.x;
-				}
-			}
-			break;
 		case SDL_MOUSEBUTTONUP:
 			if (event.button.button == SDL_BUTTON_LEFT) {
 				dragged_object_index = -1;
@@ -1292,6 +1307,10 @@ void process_input(struct game_state *game)
 			break;
 		case SDL_MOUSEMOTION:
 			if (game->mode == GAME_MODE_EDIT) {
+				/* Reveal menu if mouse is at the top of the screen */
+				menu_is_visible =
+					(event.motion.y < MENU_HEIGHT * ((1 + NUM_OBJECT_TYPES) / 10));
+
 				if (dragged_object_index >= 0) {
 					go[dragged_object_index].x = screen_to_worldx(event.motion.x);
 					go[dragged_object_index].y = screen_to_worldy(event.motion.y);
@@ -1302,6 +1321,45 @@ void process_input(struct game_state *game)
 					game->camera_x -= world_dx;
 					game->desired_camera_x = game->camera_x;
 					last_mouse_x = event.motion.x;
+				}
+			}
+			break;
+
+		case SDL_MOUSEBUTTONDOWN:
+			if (game->mode != GAME_MODE_EDIT)
+				break;
+			if (event.button.button == SDL_BUTTON_RIGHT) {
+				dragging_camera = 1;
+				last_mouse_x = event.button.x;
+				break;
+			}
+			if (event.button.button == SDL_BUTTON_LEFT) {
+				/* Intercept click if menu is visible and clicked */
+				if (menu_is_visible && event.button.y <
+						MENU_HEIGHT * (NUM_OBJECT_TYPES + 1) / 10) {
+					int clicked_row = event.button.y / MENU_HEIGHT;
+					int clicked_index = clicked_row * 10 +
+							event.button.x / MENU_ITEM_WIDTH;
+
+					if (clicked_index < NUM_OBJECT_TYPES) {
+						/* Clicked an object: Spawn it and attach it to the mouse */
+						int new_obj = snis_object_pool_alloc_obj(game->objpool);
+						if (new_obj >= 0) {
+							go[new_obj].type = clicked_index;
+							go[new_obj].current_image = 0;
+							go[new_obj].x = screen_to_worldx(event.button.x);
+							go[new_obj].y = screen_to_worldy(event.button.y);
+							dragged_object_index = new_obj; /* Immediately start dragging */
+						}
+					} else if (clicked_index == NUM_OBJECT_TYPES) {
+						/* Clicked the slot just after the last object type: Save */
+						save_level_items("custom_level.txt", game);
+					}
+				} else {
+					/* Normal object selection in the world */
+					float wx = screen_to_worldx(event.button.x);
+					float wy = screen_to_worldy(event.button.y);
+					dragged_object_index = find_object_at(wx, wy);
 				}
 			}
 			break;
@@ -2333,6 +2391,47 @@ static void draw_wasted(SDL_Renderer *renderer)
 	SDL_RenderCopy(renderer, wasted.texture, NULL, &destrect);
 }
 
+void draw_edit_menu(SDL_Renderer *renderer)
+{
+	if (!menu_is_visible) return;
+
+	/* Draw a semi-transparent background for the menu */
+	SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+	SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
+	SDL_Rect menu_bg = {0, 0, game.window_width, MENU_HEIGHT};
+	SDL_RenderFillRect(renderer, &menu_bg);
+
+	/* Draw available objects as icons */
+	for (int i = 0; i < NUM_OBJECT_TYPES; i++) {
+		struct object_type_data *odt = &object_type[i];
+
+		int row = i / 10;
+		/* Define the destination rectangle for the icon */
+		SDL_Rect dest;
+		dest.w = 70; /* Scale icons down to fit nicely */
+		dest.h = 70;
+		dest.x = ((i % 10) * MENU_ITEM_WIDTH) + (MENU_ITEM_WIDTH / 2) - (dest.w / 2);
+		dest.y = row * 80 + (MENU_HEIGHT / 2) - (dest.h / 2);
+
+		/* Render the first frame of the object's animation */
+		if (odt->image[0] && odt->image[0]->texture) {
+			SDL_SetTextureBlendMode(odt->image[0]->texture, SDL_BLENDMODE_MOD);
+			SDL_RenderCopy(renderer, odt->image[0]->texture, NULL, &dest);
+		}
+
+		/* Draw a subtle separator line */
+		SDL_SetRenderDrawColor(renderer, 100, 100, 100, 255);
+		SDL_RenderDrawLine(renderer, (i + 1) * MENU_ITEM_WIDTH, 0, (i + 1) * MENU_ITEM_WIDTH, MENU_HEIGHT);
+	}
+
+	/* Draw a mock "Save" Button (A simple red square as an icon) */
+	int row = NUM_OBJECT_TYPES / 10;
+	int save_slot_x = (NUM_OBJECT_TYPES % 10) * MENU_ITEM_WIDTH;
+	SDL_Rect save_btn = { save_slot_x + 5, row * 80, 70, 70 };
+	SDL_SetRenderDrawColor(renderer, 200, 0, 0, 255); /* Red for save */
+	SDL_RenderFillRect(renderer, &save_btn);
+}
+
 /* Render graphics to the screen */
 void render(struct game_state *game)
 {
@@ -2373,6 +2472,8 @@ void render(struct game_state *game)
 	sample_mask_around_object(&go[0], colors);
 	draw_debug_rectangles(player, colors);
 	debug_sampling();
+	if (game->mode == GAME_MODE_EDIT)
+		draw_edit_menu(game->renderer);
 
 done:
 	/* Present the back buffer to the screen */
