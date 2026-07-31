@@ -1067,9 +1067,11 @@ static void process_keydown(__attribute__((unused)) SDL_Event event)
 		keypressed[keyjump] = 1;
 		break;
 	case SDLK_z:
+	case SDLK_COMMA:
 		keypressed[keyshoot] = 1;
 		break;
 	case SDLK_x:
+	case SDLK_PERIOD:
 		keypressed[keygrenade] = 1;
 		break;
 	case SDLK_r:
@@ -1106,9 +1108,11 @@ static void process_keyup(__attribute__((unused)) SDL_Event event)
 		keypressed[keyjump] = 0;
 		break;
 	case SDLK_z:
+	case SDLK_COMMA:
 		keypressed[keyshoot] = 0;
 		break;
 	case SDLK_x:
+	case SDLK_PERIOD:
 		keypressed[keygrenade] = 0;
 		break;
 	default:
