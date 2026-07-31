@@ -5,6 +5,7 @@
 #include <dirent.h>
 #include <limits.h>
 #include <string.h>
+#include <errno.h>
 
 #include "png_utils.h"
 #include "snis_alloc.h"
@@ -115,6 +116,41 @@ static struct game_object *player;
 #define OBJTYPE_MUZZLE_FLASH 27
 #define OBJTYPE_MEDICINE_BOX 29
 
+static const struct obj_type_name_entry {
+	char *name;
+	int type;
+} obj_type_name[] = {
+	{"player", OBJTYPE_PLAYER },
+	{"wallmap", OBJTYPE_WALLMAP },
+	{"desk", OBJTYPE_DESK },
+	{"shells", OBJTYPE_SHELLS },
+	{"radar_console", OBJTYPE_RADAR_CONSOLE },
+	{"bed", OBJTYPE_BED },
+	{"crates", OBJTYPE_CRATES },
+	{"dirtclod", OBJTYPE_DIRTCLOD },
+	{"soldier", OBJTYPE_SOLDIER },
+	{"barrel", OBJTYPE_BARREL },
+	{"tnt", OBJTYPE_TNT },
+	{"ammo", OBJTYPE_AMMO },
+	{"flag", OBJTYPE_FLAG },
+	{"body", OBJTYPE_DEAD_SOLDIER },
+	{"blood_patch", OBJTYPE_BLOOD_PATCH },
+	{"blood_drop", OBJTYPE_BLOOD_DROP },
+	{"dirt_speck", OBJTYPE_DIRT_SPECK },
+	{"grenade", OBJTYPE_GRENADE },
+	{"smoke1", OBJTYPE_SMOKE1 },
+	{"smoke1", OBJTYPE_SMOKE2 },
+	{"smoke1", OBJTYPE_SMOKE3 },
+	{"smoke1", OBJTYPE_SMOKE4 },
+	{"smoke1", OBJTYPE_SMOKE5 },
+	{"smoke1", OBJTYPE_SMOKE6 },
+	{"smoke1", OBJTYPE_SMOKE7 },
+	{"smoke1", OBJTYPE_SMOKE8 },
+	{"smoke1", OBJTYPE_SMOKE9 },
+	{"muzzle_flash", OBJTYPE_MUZZLE_FLASH },
+	{"medicine_box", OBJTYPE_MEDICINE_BOX },
+};
+
 static struct object_type_data {
 	struct image **image;
 	int nimages;
@@ -208,58 +244,13 @@ struct image healthlabel = { "images/healthlabel.png", NULL, 0, 0, 0, 0, NULL };
 struct image scorelabel = { "images/scorelabel.png", NULL, 0, 0, 0, 0, NULL };
 struct image wasted = { "images/wasted.png", NULL, 0, 0, 0, 0, NULL };
 
+#define MAX_OBJECTS 1000
 static struct static_object_entry {
 	int level;
 	float x, y;
 	int type;
-} static_object[] = {
-	{ 0, 450.0f, 700.0f, OBJTYPE_RADAR_CONSOLE, },
-	{ 0, 550.0f, 700.0f, OBJTYPE_MEDICINE_BOX, },
-	{ 0, 150.0f, 590.0f, OBJTYPE_WALLMAP, },
-	{ 0, 130.0f, 680.0f, OBJTYPE_DESK, },
-	{ 0, 1400.0f, 450.0f, OBJTYPE_SHELLS, },
-	{ 0, 1200.0f, 385.0f, OBJTYPE_BED, },
-	{ 0, 1600.0f, 385.0f, OBJTYPE_CRATES, },
-	{ 0, 1630.0f, 600.0f, OBJTYPE_DESK, },
-	{ 0, 2250.0f, 695.0f, OBJTYPE_RADAR_CONSOLE, },
-	{ 0, 1162.0f, 627.0f, OBJTYPE_BED, },
-	{ 0, 1848.0f, 586.0f, OBJTYPE_BED, },
-	{ 0, 2286.0f, 400.0f, OBJTYPE_CRATES, },
-	{ 0, 2604.0f, 400.0f, OBJTYPE_CRATES, },
-	{ 0, 2550.0f, 685.0f, OBJTYPE_DESK, },
-	{ 0, 2850.0f, 670.0f, OBJTYPE_SHELLS, },
-	{ 0, 3226.0f, 326.0f, OBJTYPE_BARREL, },
-	{ 0, 3286.0f, 326.0f, OBJTYPE_AMMO, },
-	{ 0, 3286.0f, 618.0f, OBJTYPE_TNT, },
-	{ 0, 3246.0f, 618.0f, OBJTYPE_SOLDIER, },
-	{ 0, 3660.0f, 424.0f, OBJTYPE_SOLDIER, },
-	{ 0, 3950.0f, 632.0f, OBJTYPE_SOLDIER, },
-	{ 0, 3950.0f, 612.0f, OBJTYPE_RADAR_CONSOLE, },
-	{ 0, 2536.0f, 429.0f, OBJTYPE_SOLDIER, },
-	{ 0, 2222.0f, 429.0f, OBJTYPE_SOLDIER, },
-	{ 0, 2118.0f, 718.0f, OBJTYPE_SOLDIER, },
-	{ 0, 1652.0f, 418.0f, OBJTYPE_SOLDIER, },
-	{ 0, 1372.0f, 472.0f, OBJTYPE_SOLDIER, },
-	{ 0, 1222.0f, 636.0f, OBJTYPE_SOLDIER, },
-	{ 0, 1132.0f, 381.0f, OBJTYPE_SOLDIER, },
-	{ 0, 772.0f, 472.0f, OBJTYPE_SOLDIER, },
-	{ 0, 510.0f, 714.0f, OBJTYPE_SOLDIER, },
-	{ 0, 228.0f, 687.0f, OBJTYPE_SOLDIER, },
-	{ 0, 650.0f, 343.0f, OBJTYPE_SOLDIER, },
-	{ 0, 1554.0f, 265.0f, OBJTYPE_SOLDIER, },
-	{ 0, 2048.0f, 204.0f, OBJTYPE_SOLDIER, },
-	{ 0, 2456.0f, 254.0f, OBJTYPE_SOLDIER, },
-	{ 0, 3918.0f, 258.0f, OBJTYPE_SOLDIER, },
-	{ 0, 2730.0f, 182.0f, OBJTYPE_SOLDIER, },
-	{ 0, 2922.0f, 144.0f, OBJTYPE_SOLDIER, },
-	{ 0, 494.0f, 600.0f, OBJTYPE_FLAG, },
-	{ 0, 2548.0f, 608.0f, OBJTYPE_FLAG, },
-	{ 0, 3952.0f, 540.0f, OBJTYPE_FLAG, },
-	{ 0, 2112.0f, 718.0f, OBJTYPE_BARREL, },
-	{ 0, 1680.0f, 400.0f, OBJTYPE_MEDICINE_BOX, },
-	{ 0, 2620.0f, 686.0f, OBJTYPE_MEDICINE_BOX, },
-	{ 0, 3872.0f, 395.0f, OBJTYPE_MEDICINE_BOX, },
-};
+} static_object[MAX_OBJECTS];
+static int nobjects = 0;
 
 #define MAXSPARKS 10000
 
@@ -663,12 +654,90 @@ static void player_init(void)
 	player->hidden = 0;
 }
 
+static int read_level_items(char *filename)
+{
+	int line = 0;
+	char buffer[1024];
+	char *c;
+	int current_level = -1;
+
+	FILE *f = fopen(filename, "r");
+	if (!f) {
+		fprintf(stderr, "Cannot open %s: %s\n", filename, strerror(errno));
+		return -1;
+	}
+
+	nobjects = 0;
+	do {
+		c = fgets(buffer, sizeof(buffer), f);
+		if (!c) {
+			if (feof(f))
+				break;
+			fprintf(stderr, "Error reading file %s: %s\n", filename, strerror(errno));
+			return -1;
+		}
+		line++;
+		if (buffer[0] == '#')
+			continue;
+		if (strncmp(buffer, "\n", sizeof(buffer)) == 0)
+			continue;
+		int iv = 0;
+		int rc = sscanf(buffer, " level: %d", &iv);
+		if (rc == 1) {
+			if (iv < 1 || iv > 100) {
+				fprintf(stderr, "%s:%d: level %d out of range 1 - 100\n",
+						filename, line, iv);
+				return -1;
+			}
+			current_level = iv - 1;
+			continue;
+		}
+
+		float x, y;
+		char object_type[1000];
+		rc = sscanf(buffer, " %f %f %100s", &x, &y, object_type);
+		if (rc == 3) {
+			if (x < 0 || x >= 4096 || y < 0 || y >= 768) {
+				fprintf(stderr, "%s:%d Coordinates out of range: %g,%g\n",
+					filename, line, x, y);
+				return -1;
+			}
+			int found = 0;
+			for (int i = 0; i < ARRAYSIZE(obj_type_name); i++) {
+				if (strncasecmp(obj_type_name[i].name,
+					object_type, sizeof(object_type)) == 0) {
+					static_object[nobjects].level = current_level;
+					static_object[nobjects].type = obj_type_name[i].type;
+					static_object[nobjects].x = x;
+					static_object[nobjects].y = y;
+					nobjects++;
+					found = 1;
+					printf("Added %d %g, %g, %s (%d)\n", current_level, x, y,
+						obj_type_name[i].name, obj_type_name[i].type);
+					break;
+				}
+			}
+			if (!found) {
+				fprintf(stderr, "%s:%d bad object type '%s'\n",
+					filename, line, object_type);
+				return -1;
+			}
+		} else {
+			fprintf(stderr, "%s:%d: Bad line, expected 'level:', or x, y object-type\n",
+					filename, line);
+			return -1;
+		}
+	} while (1);
+	printf("nobjects = %d\n", nobjects);
+	return 0;
+}
+
 static void set_up_level(int l)
 {
-	for (int i = 0; i < ARRAYSIZE(static_object); i++) {
+	for (int i = 0; i < nobjects; i++) {
 		if (static_object[i].level != l)
 			continue;
-		printf("Allocating object (total %d)\n", ARRAYSIZE(static_object));
+		printf("Allocating object (total %d)\n", nobjects);
 		int n = snis_object_pool_alloc_obj(game.objpool);
 		if (n < 0) {
 			fprintf(stderr, "Out of objects at %s:%d\n", __FILE__, __LINE__);
@@ -1017,6 +1086,8 @@ bool init_game(struct game_state *game)
 	snis_object_pool_setup(&game->objpool, MAX_GAME_OBJS);
 	snis_object_pool_setup(&game->sparkpool, MAXSPARKS);
 	player_init();
+	if (read_level_items("level-items.txt"))
+		exit(1);
 	set_up_level(0);
 	game->score = 0;
 	game->lives = 3;
