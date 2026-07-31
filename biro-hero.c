@@ -1348,6 +1348,33 @@ static void pithy_one_liner(void) /* Hopefully pithy anyway.  Maybe just stupid.
 	wwviaudio_add_sound(n);
 }
 
+static void damage_player(int x, __attribute__((unused)) int y, __attribute__((unused)) void *context)
+{
+	/* Roll for damage */
+	int damage = 8 * DIFFICULTY_LEVEL + randn(10 * DIFFICULTY_LEVEL);
+	/* harder to actually kill in last moments */
+	if (player->hit_points < 10 * DIFFICULTY_LEVEL)
+		damage -= 8 * DIFFICULTY_LEVEL;
+	printf("Damage = %d\n", damage);
+	if (damage > 0) {
+		if (player->hit_points > 0 && player->hit_points - damage <= 0) {
+			game.lives--;
+		}
+		player->hit_points -= damage;
+		if (player->hit_points < 0)
+			player->hit_points = 0;
+		if (randn(100) < 33)
+			wwviaudio_add_sound(OWWW);
+		int xbias = 0;
+		if (x < player->x)
+			xbias = -2.0f;
+		else
+			xbias = 2.0f;
+		add_sparks(damage, OBJTYPE_BLOOD_DROP,
+			player->x, player->y, 2.0f, xbias, 0.0f, 20);
+	}
+}
+
 static int shoot_at_player_sampler(int x, int y, void *context)
 {
 	/* Soldier is looking around to see if the player is shootable */
@@ -1391,32 +1418,8 @@ static int shoot_at_player_sampler(int x, int y, void *context)
 		/* Roll for hit */
 		int hitchance = randn(1000);
 		printf("hitchance = %d\n", hitchance);
-		if (hitchance < 333) {
-			/* Roll for damage */
-			int damage = 8 * DIFFICULTY_LEVEL + randn(10 * DIFFICULTY_LEVEL);
-			/* harder to actually kill in last moments */
-			if (player->hit_points < 10 * DIFFICULTY_LEVEL)
-				damage -= 8 * DIFFICULTY_LEVEL;
-			printf("Damage = %d\n", damage);
-			if (damage > 0) {
-				if (player->hit_points > 0 && player->hit_points - damage <= 0) {
-					game.lives--;
-				}
-				player->hit_points -= damage;
-				if (player->hit_points < 0)
-					player->hit_points = 0;
-				if (randn(100) < 33)
-					wwviaudio_add_sound(OWWW);
-				int xbias = 0;
-				if (x < player->x)
-					xbias = -2.0f;
-				else
-					xbias = 2.0f;
-				add_sparks(damage, OBJTYPE_BLOOD_DROP,
-					player->x, player->y, 2.0f, xbias, 0.0f, 20);
-			}
-		}
-		
+		if (hitchance < 333)
+			damage_player(x, y, context);
 		return -1;
 	}
 	return 0;
@@ -1738,8 +1741,10 @@ static int bullet_shot_sampler(int x, int y, void *context)
 			if (!snis_object_pool_is_allocated(game.objpool, i))
 				continue;
 			struct game_object *o = &go[i];
-			if (o->type != OBJTYPE_SOLDIER)
+			if (o->type != OBJTYPE_SOLDIER && o->type != OBJTYPE_PLAYER)
 				continue;
+			if (o->type == OBJTYPE_PLAYER && shooter && shooter == player)
+				continue; /* Player can't shoot himself */
 			float dist2 = (o->x - x) * (o->x -x) + (o->y - y) * (o->y - y);
 			if (dist2 >= 25.0f)
 				continue;
@@ -1754,8 +1759,13 @@ static int bullet_shot_sampler(int x, int y, void *context)
 				}
 			}
 			add_sparks(20, OBJTYPE_BLOOD_DROP, x, y, 2.0f, vxb, 0.0f, 20);
-			if (o->hit_points > 0)
-				o->hit_points--;
+			if (o->type == OBJTYPE_SOLDIER) {
+				if (o->hit_points > 0)
+					o->hit_points--;
+			} else {
+				if (o->type == OBJTYPE_PLAYER)
+					damage_player(x, y, context);
+			}
 			return -1;
 		}
 		return 0;
