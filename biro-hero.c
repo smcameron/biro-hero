@@ -1351,7 +1351,8 @@ void process_input(struct game_state *game)
 			if (game->mode == GAME_MODE_EDIT) {
 				/* Reveal menu if mouse is at the top of the screen */
 				menu_is_visible =
-					(event.motion.y < MENU_HEIGHT * (menu_item_count / 10));
+					(event.motion.y < MENU_HEIGHT *
+						(1 + ((menu_item_count + 1) / 10)));
 
 				if (dragged_object_index >= 0) {
 					go[dragged_object_index].x = screen_to_worldx(event.motion.x);
@@ -1378,7 +1379,7 @@ void process_input(struct game_state *game)
 			if (event.button.button == SDL_BUTTON_LEFT) {
 				/* Intercept click if menu is visible and clicked */
 				if (menu_is_visible && event.button.y <
-						MENU_HEIGHT * (menu_item_count / 10)) {
+						MENU_HEIGHT * (1 + (1 + menu_item_count) / 10)) {
 					int clicked_row = event.button.y / MENU_HEIGHT;
 					int clicked_index = clicked_row * 10 +
 							event.button.x / MENU_ITEM_WIDTH;
@@ -2441,12 +2442,13 @@ static void draw_wasted(SDL_Renderer *renderer)
 
 void draw_edit_menu(SDL_Renderer *renderer)
 {
-	if (!menu_is_visible) return;
+	if (!menu_is_visible)
+		return;
 
 	/* Draw a semi-transparent background for the menu */
 	SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
 	SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
-	SDL_Rect menu_bg = {0, 0, game.window_width, MENU_HEIGHT};
+	SDL_Rect menu_bg = {0, 0, game.window_width, (1 + (menu_item_count + 1) / 10) * MENU_HEIGHT};
 	SDL_RenderFillRect(renderer, &menu_bg);
 
 	/* Draw available objects as icons */
@@ -2469,10 +2471,11 @@ void draw_edit_menu(SDL_Renderer *renderer)
 			SDL_SetTextureBlendMode(odt->image[0]->texture, SDL_BLENDMODE_MOD);
 			SDL_RenderCopy(renderer, odt->image[0]->texture, NULL, &dest);
 		}
-
+#if 0
 		/* Draw a subtle separator line */
 		SDL_SetRenderDrawColor(renderer, 100, 100, 100, 255);
 		SDL_RenderDrawLine(renderer, (idx + 1) * MENU_ITEM_WIDTH, 0, (idx + 1) * MENU_ITEM_WIDTH, MENU_HEIGHT);
+#endif
 		idx++;
 	}
 
