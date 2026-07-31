@@ -114,7 +114,7 @@ static struct game_object *player;
 #define OBJTYPE_SMOKE8 25
 #define OBJTYPE_SMOKE9 26
 #define OBJTYPE_MUZZLE_FLASH 27
-#define OBJTYPE_MEDICINE_BOX 29
+#define OBJTYPE_MEDICINE_BOX 28
 
 static const struct obj_type_name_entry {
 	char *name;
