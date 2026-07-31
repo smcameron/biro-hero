@@ -1529,7 +1529,7 @@ static void move_soldier(struct game_object *o, float delta_time)
 static int bullet_shot_sampler(int x, int y, void *context);
 
 #define GRENADE_FUSE_TIME_SECS 4.0
-#define GRENADE_FRAGMENT_COUNT 30
+#define GRENADE_FRAGMENT_COUNT 60
 #define GRENADE_LAUNCH_SPEED 6.0f
 static void move_grenade(struct game_object *o, float delta_time)
 {
