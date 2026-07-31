@@ -27,6 +27,11 @@
 
 #define GAME_MODE_TITLE_SCREEN 0
 #define GAME_MODE_PLAY 1
+#define GAME_MODE_EDIT 2
+
+static int dragged_object_index = -1;
+static int dragging_camera = 0;
+static int last_mouse_x = 0;
 
 /* Game state struct to hold core systems */
 struct game_state {
@@ -350,6 +355,28 @@ static int randn(int n)
 	uint32_t x = xorshift(&seed);
 	x &= 0x7fffffff; /* make sure it's positive */
 	return (int) (x % n);
+}
+
+static int find_object_at(float wx, float wy)
+{
+	/* Iterate backwards to select the object drawn on top */
+	for (int i = snis_object_pool_highest_object(game.objpool); i >= 0; i--) {
+		if (!snis_object_pool_is_allocated(game.objpool, i))
+			continue;
+		struct game_object *o = &go[i];
+		struct object_type_data *odt = &object_type[o->type];
+		int img_idx = o->current_image;
+
+		float w = odt->image[img_idx]->width * odt->scalex;
+		float h = odt->image[img_idx]->height * odt->scaley;
+
+		/* Check if world coordinates fall within the object's bounding box */
+		if (wx >= o->x - w / 2.0f && wx <= o->x + w / 2.0f &&
+		    wy >= o->y - h / 2.0f && wy <= o->y + h / 2.0f) {
+			return i;
+		}
+	}
+	return -1;
 }
 
 static void move_spark(struct spark_object *s, float delta_time)
@@ -1229,13 +1256,57 @@ void process_input(struct game_state *game)
 			if (event.key.keysym.sym == SDLK_ESCAPE) {
 				game->is_running = false;
 			}
+			/* Ctrl-E to toggle Edit Mode */
+			if (event.key.keysym.sym == SDLK_e && (SDL_GetModState() & KMOD_CTRL)) {
+				if (game->mode != GAME_MODE_EDIT) {
+					reset_game(3);
+					game->mode = GAME_MODE_EDIT;
+				} else {
+					reset_game(3); /* Exit edit mode to the title screen */
+				}
+				break;
+			}
 			process_keydown(event);
 			break;
 		case SDL_KEYUP:
 			process_keyup(event);
 			break;
+		case SDL_MOUSEBUTTONDOWN:
+			if (game->mode == GAME_MODE_EDIT) {
+				if (event.button.button == SDL_BUTTON_LEFT) {
+					float wx = screen_to_worldx(event.button.x);
+					float wy = screen_to_worldy(event.button.y);
+					dragged_object_index = find_object_at(wx, wy);
+				} else if (event.button.button == SDL_BUTTON_RIGHT) {
+					dragging_camera = 1;
+					last_mouse_x = event.button.x;
+				}
+			}
+			break;
+		case SDL_MOUSEBUTTONUP:
+			if (event.button.button == SDL_BUTTON_LEFT) {
+				dragged_object_index = -1;
+			} else if (event.button.button == SDL_BUTTON_RIGHT) {
+				dragging_camera = 0;
+			}
+			break;
+		case SDL_MOUSEMOTION:
+			if (game->mode == GAME_MODE_EDIT) {
+				if (dragged_object_index >= 0) {
+					go[dragged_object_index].x = screen_to_worldx(event.motion.x);
+					go[dragged_object_index].y = screen_to_worldy(event.motion.y);
+				}
+				if (dragging_camera) {
+					int dx = event.motion.x - last_mouse_x;
+					float world_dx = (dx * 1024.0f) / (game->window_width - 200.0f);
+					game->camera_x -= world_dx;
+					game->desired_camera_x = game->camera_x;
+					last_mouse_x = event.motion.x;
+				}
+			}
+			break;
 		default:
-		break;
+			break;
 		}
 	}
 }
@@ -1851,6 +1922,15 @@ void update(float delta_time)
 {
 	int do_player_animation = 0;
 
+	if (game.mode == GAME_MODE_EDIT) {
+		/* Enforce camera boundaries but do nothing else */
+		if (game.camera_x > game.camera_max_x)
+			game.camera_x = game.camera_max_x;
+		if (game.camera_x < game.camera_min_x)
+			game.camera_x = game.camera_min_x;
+		return;
+	}
+
 	if (game.mode != GAME_MODE_PLAY)
 		return;
 
@@ -2262,7 +2342,7 @@ void render(struct game_state *game)
 
 	/* TODO: Draw your game objects here (e.g., SDL_RenderCopy, SDL_RenderFillRect) */
 	draw_background_image(game->renderer);
-	if (game->mode != GAME_MODE_PLAY)
+	if (game->mode != GAME_MODE_PLAY && game->mode != GAME_MODE_EDIT)
 		goto done;
 	draw_level(game->renderer);
 
@@ -2420,7 +2500,8 @@ int main(__attribute__((unused)) int argc, __attribute__((unused)) char *argv[])
 		if (time_to_wait > 0 && time_to_wait <= FRAME_TARGET_TIME) {
 			SDL_Delay(time_to_wait);
 		}
-		move_camera();
+		if (game.mode != GAME_MODE_EDIT)
+			move_camera();
 		last_frame_time = current_time;
 	}
 
