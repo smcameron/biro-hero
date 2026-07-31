@@ -124,46 +124,12 @@ static struct game_object *player;
 #define OBJTYPE_MEDICINE_BOX 28
 #define NUM_OBJECT_TYPES 29
 
-static const struct obj_type_name_entry {
-	char *name;
-	int type;
-} obj_type_name[] = {
-	{"player", OBJTYPE_PLAYER },
-	{"wallmap", OBJTYPE_WALLMAP },
-	{"desk", OBJTYPE_DESK },
-	{"shells", OBJTYPE_SHELLS },
-	{"radar_console", OBJTYPE_RADAR_CONSOLE },
-	{"bed", OBJTYPE_BED },
-	{"crates", OBJTYPE_CRATES },
-	{"dirtclod", OBJTYPE_DIRTCLOD },
-	{"soldier", OBJTYPE_SOLDIER },
-	{"barrel", OBJTYPE_BARREL },
-	{"tnt", OBJTYPE_TNT },
-	{"ammo", OBJTYPE_AMMO },
-	{"flag", OBJTYPE_FLAG },
-	{"body", OBJTYPE_DEAD_SOLDIER },
-	{"blood_patch", OBJTYPE_BLOOD_PATCH },
-	{"blood_drop", OBJTYPE_BLOOD_DROP },
-	{"dirt_speck", OBJTYPE_DIRT_SPECK },
-	{"grenade", OBJTYPE_GRENADE },
-	{"smoke1", OBJTYPE_SMOKE1 },
-	{"smoke1", OBJTYPE_SMOKE2 },
-	{"smoke1", OBJTYPE_SMOKE3 },
-	{"smoke1", OBJTYPE_SMOKE4 },
-	{"smoke1", OBJTYPE_SMOKE5 },
-	{"smoke1", OBJTYPE_SMOKE6 },
-	{"smoke1", OBJTYPE_SMOKE7 },
-	{"smoke1", OBJTYPE_SMOKE8 },
-	{"smoke1", OBJTYPE_SMOKE9 },
-	{"muzzle_flash", OBJTYPE_MUZZLE_FLASH },
-	{"medicine_box", OBJTYPE_MEDICINE_BOX },
-};
-
 static struct object_type_data {
 	struct image **image;
 	int nimages;
 	float scalex, scaley;
 	void (*draw)(SDL_Renderer *renderer, struct game_object *o);
+	char *name;
 } object_type[NUM_OBJECT_TYPES] = { 0 };
 
 #define MAX_LEVELS 3
@@ -701,7 +667,7 @@ void save_level_items(const char *filename, struct game_state *game)
 		/* Skip objects you don't want saved, like the player, if applicable */
 		if (o->type == OBJTYPE_PLAYER)
 			continue;
-		fprintf(f, "	%f %f %s\n", o->x, o->y, obj_type_name[o->type].name);
+		fprintf(f, "	%f %f %s\n", o->x, o->y, object_type[o->type].name);
 	}
 
 	fclose(f);
@@ -748,8 +714,8 @@ static int read_level_items(char *filename)
 		}
 
 		float x, y;
-		char object_type[1000];
-		rc = sscanf(buffer, " %f %f %100s", &x, &y, object_type);
+		char name[1000];
+		rc = sscanf(buffer, " %f %f %100s", &x, &y, name);
 		if (rc == 3) {
 			if (x < 0 || x >= 4096 || y < 0 || y >= 768) {
 				fprintf(stderr, "%s:%d Coordinates out of range: %g,%g\n",
@@ -757,23 +723,22 @@ static int read_level_items(char *filename)
 				return -1;
 			}
 			int found = 0;
-			for (int i = 0; i < ARRAYSIZE(obj_type_name); i++) {
-				if (strncasecmp(obj_type_name[i].name,
-					object_type, sizeof(object_type)) == 0) {
+			for (int i = 0; i < NUM_OBJECT_TYPES; i++) {
+				if (strncasecmp(object_type[i].name, name, sizeof(name)) == 0) {
 					static_object[nobjects].level = current_level;
-					static_object[nobjects].type = obj_type_name[i].type;
+					static_object[nobjects].type = i;
 					static_object[nobjects].x = x;
 					static_object[nobjects].y = y;
 					nobjects++;
 					found = 1;
 					printf("Added %d %g, %g, %s (%d)\n", current_level, x, y,
-						obj_type_name[i].name, obj_type_name[i].type);
+						object_type[i].name, i);
 					break;
 				}
 			}
 			if (!found) {
 				fprintf(stderr, "%s:%d bad object type '%s'\n",
-					filename, line, object_type);
+					filename, line, name);
 				return -1;
 			}
 		} else {
@@ -906,6 +871,7 @@ static void set_up_object_type_data(void)
 {
 	/* Setup OBJTYPE_PLAYER data */
 	int n = OBJTYPE_PLAYER;
+	object_type[n].name = "player";
 	object_type[n].image = malloc(10 * sizeof(*object_type[0].image));
 	object_type[n].image[0] = &hero_right_1;
 	object_type[n].image[1] = &hero_right_2;
@@ -923,6 +889,7 @@ static void set_up_object_type_data(void)
 	object_type[n].draw = draw_object;
 
 	n = OBJTYPE_WALLMAP;
+	object_type[n].name = "wallmap";
 	object_type[n].image = malloc(1 * sizeof(*object_type[0].image));
 	object_type[n].image[0] = &wallmap;
 	object_type[n].nimages = 1;
@@ -931,6 +898,7 @@ static void set_up_object_type_data(void)
 	object_type[n].draw = draw_object;
 
 	n = OBJTYPE_DESK;
+	object_type[n].name = "desk";
 	object_type[n].image = malloc(1 * sizeof(*object_type[0].image));
 	object_type[n].image[0] = &desk;
 	object_type[n].nimages = 1;
@@ -939,6 +907,7 @@ static void set_up_object_type_data(void)
 	object_type[n].draw = draw_object;
 
 	n = OBJTYPE_RADAR_CONSOLE;
+	object_type[n].name = "radar_console";
 	object_type[n].image = malloc(1 * sizeof(*object_type[0].image));
 	object_type[n].image[0] = &radar_console;
 	object_type[n].nimages = 1;
@@ -947,6 +916,7 @@ static void set_up_object_type_data(void)
 	object_type[n].draw = draw_object;
 
 	n = OBJTYPE_SHELLS;
+	object_type[n].name = "shells";
 	object_type[n].image = malloc(1 * sizeof(*object_type[0].image));
 	object_type[n].image[0] = &artillery_shells;
 	object_type[n].nimages = 1;
@@ -955,6 +925,7 @@ static void set_up_object_type_data(void)
 	object_type[n].draw = draw_object;
 
 	n = OBJTYPE_BED;
+	object_type[n].name = "bed";
 	object_type[n].image = malloc(1 * sizeof(*object_type[0].image));
 	object_type[n].image[0] = &bed;
 	object_type[n].nimages = 1;
@@ -963,6 +934,7 @@ static void set_up_object_type_data(void)
 	object_type[n].draw = draw_object;
 
 	n = OBJTYPE_CRATES;
+	object_type[n].name = "crates";
 	object_type[n].image = malloc(1 * sizeof(*object_type[0].image));
 	object_type[n].image[0] = &crates;
 	object_type[n].nimages = 1;
@@ -971,6 +943,7 @@ static void set_up_object_type_data(void)
 	object_type[n].draw = draw_object;
 
 	n = OBJTYPE_DIRTCLOD;
+	object_type[n].name = "dirtclod";
 	object_type[n].image = malloc(4 * sizeof(*object_type[0].image));
 	object_type[n].image[0] = &dirtclod1;
 	object_type[n].image[1] = &dirtclod2;
@@ -982,6 +955,7 @@ static void set_up_object_type_data(void)
 	object_type[n].draw = draw_object;
 
 	n = OBJTYPE_SOLDIER;
+	object_type[n].name = "soldier";
 	object_type[n].image = malloc(4 * sizeof(*object_type[0].image));
 	object_type[n].image[0] = &soldier1;
 	object_type[n].image[1] = &soldier2;
@@ -993,6 +967,7 @@ static void set_up_object_type_data(void)
 	object_type[n].draw = draw_object;
 
 	n = OBJTYPE_BARREL;
+	object_type[n].name = "barrel";
 	object_type[n].image = malloc(1 * sizeof(*object_type[0].image));
 	object_type[n].image[0] = &barrel;
 	object_type[n].nimages = 1;
@@ -1001,6 +976,7 @@ static void set_up_object_type_data(void)
 	object_type[n].draw = draw_object;
 
 	n = OBJTYPE_TNT;
+	object_type[n].name = "tnt";
 	object_type[n].image = malloc(1 * sizeof(*object_type[0].image));
 	object_type[n].image[0] = &tnt;
 	object_type[n].nimages = 1;
@@ -1009,6 +985,7 @@ static void set_up_object_type_data(void)
 	object_type[n].draw = draw_object;
 
 	n = OBJTYPE_AMMO;
+	object_type[n].name = "ammo";
 	object_type[n].image = malloc(1 * sizeof(*object_type[0].image));
 	object_type[n].image[0] = &ammo;
 	object_type[n].nimages = 1;
@@ -1017,6 +994,7 @@ static void set_up_object_type_data(void)
 	object_type[n].draw = draw_object;
 
 	n = OBJTYPE_FLAG;
+	object_type[n].name = "flag";
 	object_type[n].image = malloc(1 * sizeof(*object_type[0].image));
 	object_type[n].image[0] = &russflag;
 	object_type[n].nimages = 1;
@@ -1025,6 +1003,7 @@ static void set_up_object_type_data(void)
 	object_type[n].draw = draw_object;
 
 	n = OBJTYPE_DEAD_SOLDIER;
+	object_type[n].name = "body";
 	object_type[n].image = malloc(4 * sizeof(*object_type[0].image));
 	object_type[n].image[0] = &deadsoldier1;
 	object_type[n].image[1] = &deadsoldier2;
@@ -1036,6 +1015,7 @@ static void set_up_object_type_data(void)
 	object_type[n].draw = draw_object;
 
 	n = OBJTYPE_BLOOD_PATCH;
+	object_type[n].name = "blood_patch";
 	object_type[n].image = malloc(4 * sizeof(*object_type[0].image));
 	object_type[n].image[0] = &bloodpatch1;
 	object_type[n].image[1] = &bloodpatch2;
@@ -1047,6 +1027,7 @@ static void set_up_object_type_data(void)
 	object_type[n].draw = draw_object;
 
 	n = OBJTYPE_BLOOD_DROP;
+	object_type[n].name = "blood_drop";
 	object_type[n].image = malloc(3 * sizeof(*object_type[0].image));
 	object_type[n].image[0] = &blooddrop1;
 	object_type[n].image[1] = &blooddrop2;
@@ -1057,6 +1038,7 @@ static void set_up_object_type_data(void)
 	object_type[n].draw = draw_object;
 
 	n = OBJTYPE_DIRT_SPECK;
+	object_type[n].name = "dirt_speck";
 	object_type[n].image = malloc(3 * sizeof(*object_type[0].image));
 	object_type[n].image[0] = &dirtspeck1;
 	object_type[n].image[1] = &dirtspeck2;
@@ -1067,6 +1049,7 @@ static void set_up_object_type_data(void)
 	object_type[n].draw = draw_object;
 
 	n = OBJTYPE_GRENADE;
+	object_type[n].name = "grenade";
 	object_type[n].image = malloc(1 * sizeof(*object_type[0].image));
 	object_type[n].image[0] = &grenade;
 	object_type[n].nimages = 1;
@@ -1075,6 +1058,7 @@ static void set_up_object_type_data(void)
 	object_type[n].draw = draw_object;
 
 	n = OBJTYPE_MUZZLE_FLASH;
+	object_type[n].name = "muzzle_flash";
 	object_type[n].image = malloc(2 * sizeof(*object_type[0].image));
 	object_type[n].image[0] = &muzzle_flash_right;
 	object_type[n].image[1] = &muzzle_flash_left;
@@ -1083,7 +1067,19 @@ static void set_up_object_type_data(void)
 	object_type[n].scaley = 0.3;
 	object_type[n].draw = draw_object;
 
+	const char *smokename[] = {
+		"smoke1",
+		"smoke2",
+		"smoke3",
+		"smoke4",
+		"smoke5",
+		"smoke6",
+		"smoke7",
+		"smoke8",
+		"smoke9",
+	};
 	for (n = 0 + OBJTYPE_SMOKE1; n < 9 + OBJTYPE_SMOKE1; n++) {
+		object_type[n].name = smokename[n - OBJTYPE_SMOKE1];
 		object_type[n].image = malloc(1 * sizeof(*object_type[0].image));
 		object_type[n].image[0] = &smoke[n - OBJTYPE_SMOKE1];
 		object_type[n].nimages = 1;
@@ -1093,6 +1089,7 @@ static void set_up_object_type_data(void)
 	}
 
 	n = OBJTYPE_MEDICINE_BOX;
+	object_type[n].name = "medicine_box";
 	object_type[n].image = malloc(1 * sizeof(*object_type[0].image));
 	object_type[n].image[0] = &medicine_box;
 	object_type[n].nimages = 1;
@@ -1140,6 +1137,7 @@ bool init_game(struct game_state *game)
 	snis_object_pool_setup(&game->objpool, MAX_GAME_OBJS);
 	snis_object_pool_setup(&game->sparkpool, MAXSPARKS);
 	player_init();
+	set_up_object_type_data();
 	if (read_level_items("level-items.txt"))
 		exit(1);
 	set_up_level(0);
@@ -2577,7 +2575,6 @@ int main(__attribute__((unused)) int argc, __attribute__((unused)) char *argv[])
 		exit(1);
 	if (read_levels(game.renderer))
 		exit(1);
-	set_up_object_type_data();
 	go[0].x = 100;
 	go[0].y = 100;
 	go[0].type = OBJTYPE_PLAYER;
