@@ -47,8 +47,6 @@ struct game_state {
 	int current_level;
 	float camera_vx; /* Camera coords are in world coord system */
 	float camera_x;
-	float camera_min_x;
-	float camera_max_x;
 	float desired_camera_x;
 	int window_width, window_height;
 	struct snis_object_pool *objpool; /* controls allocation of go[] */
@@ -138,13 +136,18 @@ static struct object_type_data {
 #define MAX_LEVELS 3
 #define MAX_SCREENS_PER_LEVEL 10
 
-struct level {
+static struct level {
 	int level_number;
 	int nscreens;
 	int ncolor_codings;
 	struct image terrain[MAX_SCREENS_PER_LEVEL];
 	struct image collision_mask[MAX_SCREENS_PER_LEVEL];
 } level[MAX_LEVELS] = { 0 };
+static struct level *currlvl = &level[0];
+#define CURRENT_LEVEL (currlvl - &level[0])
+
+#define CAMERA_MIN_X (512.0f)
+#define CAMERA_MAX_X (currlvl->nscreens * 1024.0f)
 
 struct image background_image = { "images/notebook-image.png", NULL, 0, 0, 0, 0, NULL, };
 struct image title_screen_image = { "images/biro-hero-title-screen.png", NULL, 0, 0, 0, 0, NULL, };
@@ -549,84 +552,110 @@ static int read_png_files(SDL_Renderer *renderer)
 	return x;
 }
 
-static int read_levels(SDL_Renderer *renderer)
+static int read_level(SDL_Renderer *renderer, int levelnum /* zero based */)
 {
 	struct dirent **namelist;
 	char path[PATH_MAX];
+	char dir[PATH_MAX];
 
-	int rc = scandir("images/level1", &namelist, NULL, alphasort);
+	if (levelnum >= MAX_LEVELS) {
+		fprintf(stderr, "%s:%d: levelnum = %d, which is greater than the maximum (%d)\n",
+				__FILE__, __LINE__, levelnum, MAX_LEVELS - 1);
+		return -1;
+	}
+	if (levelnum < 0) {
+		fprintf(stderr, "%s:%d: levelnum = %d, out of range (0 - %d).\n",
+				__FILE__, __LINE__, levelnum, MAX_LEVELS - 1);
+		return -1;
+	}
+
+	snprintf(dir, sizeof(dir), "images/level%d", levelnum + 1);
+	int rc = scandir(dir, &namelist, NULL, alphasort);
 	if (rc < 0) {
-		fprintf(stderr, "Failed to scan directory images/level1\n");
+		fprintf(stderr, "Failed to scan directory %s\n", dir);
 		exit(1);
 	}
 	int x = 0;
 	int n = 0;
+	struct level *lvl = &level[levelnum];
+	lvl->nscreens = 0;
+	lvl->ncolor_codings = 0;
 	for (int i = 0; i < rc; i++) {
 		if (strcmp(namelist[i]->d_name, ".") == 0 ||
 			strcmp(namelist[i]->d_name, "..") == 0)
 			continue;
 		/* Is it a level background image? */
 		if (strncmp(namelist[i]->d_name, "level-", 6) == 0) {
-			int ns = level[0].nscreens;
+			int ns = lvl->nscreens;
 			fprintf(stderr, "Reading level background image %s\n", namelist[i]->d_name);
-			snprintf(path, sizeof(path), "%s/%s", "images/level1", namelist[i]->d_name);
+			snprintf(path, sizeof(path), "%s/%s", dir, namelist[i]->d_name);
 			free(namelist[i]);
-			level[0].terrain[ns].filename = strdup(path);
-			level[0].terrain[ns].data = NULL;
-			level[0].terrain[ns].width = 0;
-			level[0].terrain[ns].height = 0;
-			level[0].terrain[ns].alpha = 0;
-			level[0].terrain[ns].mode = 0;
-			level[0].terrain[ns].texture = NULL;
-			x += load_png_image(renderer, &level[0].terrain[ns], IMAGE_MODE_TEXTURE);
+			lvl->terrain[ns].filename = strdup(path);
+			lvl->terrain[ns].data = NULL;
+			lvl->terrain[ns].width = 0;
+			lvl->terrain[ns].height = 0;
+			lvl->terrain[ns].alpha = 0;
+			lvl->terrain[ns].mode = 0;
+			lvl->terrain[ns].texture = NULL;
+			x += load_png_image(renderer, &lvl->terrain[ns], IMAGE_MODE_TEXTURE);
 			printf("x = %d\n", x);
-			printf("level[0].terrain[%d].filename = %s\n", n, level[0].terrain[ns].filename);
-			printf("level[0].terrain[%d].data = %p\n", n, level[0].terrain[ns].data);
-			printf("level[0].terrain[%d].width = %d\n", n, level[0].terrain[ns].width);
-			printf("level[0].terrain[%d].height = %d\n", n, level[0].terrain[ns].height);
-			printf("level[0].terrain[%d].alpha = %d\n", n, level[0].terrain[ns].alpha);
-			printf("level[0].terrain[%d].mode = %d\n", n, level[0].terrain[ns].mode);
-			printf("level[0].terrain[%d].texture = %p\n", n, (void *) level[0].terrain[ns].texture);
-			SDL_SetTextureBlendMode(level[0].terrain[ns].texture, SDL_BLENDMODE_BLEND);
+			printf("level[%d].terrain[%d].filename = %s\n",
+					levelnum, n, lvl->terrain[ns].filename);
+			printf("level[%d].terrain[%d].data = %p\n",
+					levelnum, n, lvl->terrain[ns].data);
+			printf("level[%d].terrain[%d].width = %d\n",
+					levelnum, n, lvl->terrain[ns].width);
+			printf("level[%d].terrain[%d].height = %d\n",
+					levelnum, n, lvl->terrain[ns].height);
+			printf("level[%d].terrain[%d].alpha = %d\n",
+					levelnum, n, lvl->terrain[ns].alpha);
+			printf("level[%d].terrain[%d].mode = %d\n",
+					levelnum, n, lvl->terrain[ns].mode);
+			printf("level[%d].terrain[%d].texture = %p\n",
+					levelnum, n, (void *) lvl->terrain[ns].texture);
+			SDL_SetTextureBlendMode(lvl->terrain[ns].texture, SDL_BLENDMODE_BLEND);
 			n++;
-			level[0].nscreens++;
+			lvl->nscreens++;
 		} else if (strncmp(namelist[i]->d_name, "map-code-", 9) == 0) {
 			/* Is it a color coding for moveable areas and ladders and so on? */
-			int nc = level[0].ncolor_codings;
+			int nc = lvl->ncolor_codings;
 			fprintf(stderr, "Reading level color coding image %s\n", namelist[i]->d_name);
-			snprintf(path, sizeof(path), "%s/%s", "images/level1", namelist[i]->d_name);
+			snprintf(path, sizeof(path), "%s/%s", dir, namelist[i]->d_name);
 			free(namelist[i]);
-			level[0].collision_mask[nc].filename = strdup(path);
-			level[0].collision_mask[nc].data = NULL;
-			level[0].collision_mask[nc].width = 0;
-			level[0].collision_mask[nc].height = 0;
-			level[0].collision_mask[nc].alpha = 0;
-			level[0].collision_mask[nc].mode = 0;
-			level[0].collision_mask[nc].texture = NULL;
-			x += load_png_image(renderer, &level[0].collision_mask[nc], IMAGE_MODE_RAW);
+			lvl->collision_mask[nc].filename = strdup(path);
+			lvl->collision_mask[nc].data = NULL;
+			lvl->collision_mask[nc].width = 0;
+			lvl->collision_mask[nc].height = 0;
+			lvl->collision_mask[nc].alpha = 0;
+			lvl->collision_mask[nc].mode = 0;
+			lvl->collision_mask[nc].texture = NULL;
+			x += load_png_image(renderer, &lvl->collision_mask[nc], IMAGE_MODE_RAW);
 			printf("x = %d\n", x);
-			printf("level[0].collision_mask[%d].filename = %s\n",
-				n, level[0].collision_mask[nc].filename);
-			printf("level[0].collision_mask[%d].data = %p\n",
-				n, level[0].collision_mask[nc].data);
-			printf("level[0].collision_mask[%d].width = %d\n",
-				n, level[0].collision_mask[nc].width);
-			printf("level[0].collision_mask[%d].height = %d\n",
-				n, level[0].collision_mask[nc].height);
-			printf("level[0].collision_mask[%d].alpha = %d\n",
-				n, level[0].collision_mask[nc].alpha);
-			printf("level[0].collision_mask[%d].mode = %d\n",
-				n, level[0].collision_mask[nc].mode);
-			printf("level[0].collision_mask[%d].texture = %p\n",
-				n, (void *) level[0].collision_mask[nc].texture);
+			printf("level[%d].collision_mask[%d].filename = %s\n",
+				levelnum, n, lvl->collision_mask[nc].filename);
+			printf("level[%d].collision_mask[%d].data = %p\n",
+				levelnum, n, lvl->collision_mask[nc].data);
+			printf("level[%d].collision_mask[%d].width = %d\n",
+				levelnum, n, lvl->collision_mask[nc].width);
+			printf("level[%d].collision_mask[%d].height = %d\n",
+				levelnum, n, lvl->collision_mask[nc].height);
+			printf("level[%d].collision_mask[%d].alpha = %d\n",
+				levelnum, n, lvl->collision_mask[nc].alpha);
+			printf("level[%d].collision_mask[%d].mode = %d\n",
+				levelnum, n, lvl->collision_mask[nc].mode);
+			printf("level[%d].collision_mask[%d].texture = %p\n",
+				levelnum, n, (void *) lvl->collision_mask[nc].texture);
 			n++;
-			level[0].ncolor_codings++;
+			lvl->ncolor_codings++;
 		}
 	}
-	game.camera_min_x = 512.0f;
-	game.camera_max_x = 1024.0f * level[0].nscreens - 512.0f;
 	free(namelist);
 	return x;
+}
+
+static int read_levels(SDL_Renderer *renderer)
+{
+	return read_level(renderer, 0);
 }
 
 static void player_init(void)
@@ -720,11 +749,21 @@ static int read_level_items(char *filename)
 		char name[1000];
 		rc = sscanf(buffer, " %f %f %100s", &x, &y, name);
 		if (rc == 3) {
-			if (x < 0 || x >= 4096 || y < 0 || y >= 768) {
-				fprintf(stderr, "%s:%d Coordinates out of range: %g,%g\n",
-					filename, line, x, y);
+			if (current_level == -1 || current_level >= MAX_LEVELS) {
+				fprintf(stderr, "%s:%d: current level out of range (%d)\n", 
+					filename, line, current_level);
 				return -1;
 			}
+#if 0
+			struct level *lvl = &level[current_level];
+			/* We can't check this right now because we don't have the info yet. */
+			if (x < 0 || x >= lvl->nscreens * 1024 || y < 0 || y >= 768) {
+				fprintf(stderr, "%s:%d Coordinates out of range: %g,%g (%g, %g)\n",
+					filename, line, x, y, 0.0f, lvl->nscreens * 1024.0f);
+				return -1;
+			}
+			TODO: Move this check to later, after we have read the level data */
+#endif
 			int found = 0;
 			for (int i = 0; i < NUM_OBJECT_TYPES; i++) {
 				if (strncasecmp(object_type[i].name, name, sizeof(name)) == 0) {
@@ -1172,7 +1211,7 @@ bool init_game(struct game_state *game)
 	set_up_object_type_data();
 	if (read_level_items("level-items.txt"))
 		exit(1);
-	set_up_level(0);
+	set_up_level(CURRENT_LEVEL);
 	game->score = 0;
 	game->lives = 3;
 
@@ -1184,7 +1223,7 @@ static void reset_game(int lives)
 	snis_object_pool_free_all_objects(game.objpool);
 	snis_object_pool_free_all_objects(game.sparkpool);
 	player_init();
-	set_up_level(0);
+	set_up_level(CURRENT_LEVEL);
 	game.lives = lives;
 	if (lives == 3) {
 		game.score = 0;
@@ -1423,7 +1462,7 @@ static void sample_collision_mask(float wx, float wy, union vec3 *color)
 {
 	int img = (int) wx / 1024.0f;
 
-	if (img < 0 || img >= level[0].ncolor_codings) {
+	if (img < 0 || img >= currlvl->ncolor_codings) {
 		fprintf(stderr, "sample_color_coded_map(): Bad image number %d\n", img);
 		return;
 	}
@@ -1442,7 +1481,7 @@ static void sample_collision_mask(float wx, float wy, union vec3 *color)
 
 	int col = (int) wx;
 	int row = (int) wy;
-	uint8_t *pixel = (unsigned char *) &level[0].collision_mask[img].data[4 * (row * 1024 + col)];
+	uint8_t *pixel = (unsigned char *) &currlvl->collision_mask[img].data[4 * (row * 1024 + col)];
 
 	color->r = (float) pixel[0] / 255.0;
 	color->g = (float) pixel[1] / 255.0;
@@ -1978,7 +2017,7 @@ static int bullet_shot_sampler(int x, int y, void *context)
 	struct game_object *shooter = context;
 	if (x < 0)
 		return -1;
-	if (x >= 4096)
+	if (x >= currlvl->nscreens * 1024)
 		return -1;
 	if (y < 0)
 		return -1;
@@ -2032,10 +2071,10 @@ void update(float delta_time)
 
 	if (game.mode == GAME_MODE_EDIT) {
 		/* Enforce camera boundaries but do nothing else */
-		if (game.camera_x > game.camera_max_x)
-			game.camera_x = game.camera_max_x;
-		if (game.camera_x < game.camera_min_x)
-			game.camera_x = game.camera_min_x;
+		if (game.camera_x > CAMERA_MAX_X)
+			game.camera_x = CAMERA_MAX_X;
+		if (game.camera_x < CAMERA_MIN_X)
+			game.camera_x = CAMERA_MIN_X;
 		return;
 	}
 
@@ -2117,10 +2156,10 @@ void update(float delta_time)
 	}
 	apply_gravity_and_vertical_movement(player, delta_time);
 
-	if (game.camera_x > game.camera_max_x)
-			game.camera_x = game.camera_max_x;
-	if (game.camera_x < game.camera_min_x)
-			game.camera_x = game.camera_min_x;
+	if (game.camera_x > CAMERA_MAX_X)
+			game.camera_x = CAMERA_MAX_X;
+	if (game.camera_x < CAMERA_MIN_X)
+			game.camera_x = CAMERA_MIN_X;
 
 	player->ticks += delta_time;
 	if (do_player_animation) {
@@ -2291,10 +2330,10 @@ static void draw_level(SDL_Renderer *renderer)
 	/* printf("dest1rect = %d, %d, %d, %d\n", dest1rect.x, dest1rect.y, dest1rect.w, dest1rect.h); */
 	checkrect(&dest1rect);
 
-	SDL_SetTextureBlendMode(level[0].terrain[img1].texture, SDL_BLENDMODE_MOD);
-	SDL_RenderCopy(renderer, level[0].terrain[img1].texture, &src1rect, &dest1rect);
+	SDL_SetTextureBlendMode(currlvl->terrain[img1].texture, SDL_BLENDMODE_MOD);
+	SDL_RenderCopy(renderer, currlvl->terrain[img1].texture, &src1rect, &dest1rect);
 
-	if (img2 >= level[0].nscreens) { /* Need to draw 2nd image? */
+	if (img2 >= currlvl->nscreens) { /* Need to draw 2nd image? */
 		/* printf("Skipping image 2\n"); */
 		return;
 	}
@@ -2319,8 +2358,8 @@ static void draw_level(SDL_Renderer *renderer)
 	checkrect(&dest2rect);
 
 	/* printf("Drawing image 2\n"); */
-	SDL_SetTextureBlendMode(level[0].terrain[img2].texture, SDL_BLENDMODE_MOD);
-	SDL_RenderCopy(renderer, level[0].terrain[img2].texture, &src2rect, &dest2rect);
+	SDL_SetTextureBlendMode(currlvl->terrain[img2].texture, SDL_BLENDMODE_MOD);
+	SDL_RenderCopy(renderer, currlvl->terrain[img2].texture, &src2rect, &dest2rect);
 	/* printf("--- End draw_level() ---\n"); */
 }
 
@@ -2576,11 +2615,11 @@ static void move_camera(void)
 	game.camera_x += dx / 25.0; /* ease camera towards desired location */
 
 	/* limit camera motion near edges of play area */
-	if (game.camera_x >= game.camera_max_x) {
-		game.camera_x = game.camera_max_x;
+	if (game.camera_x >= CAMERA_MAX_X) {
+		game.camera_x = CAMERA_MAX_X;
 	}
-	if (game.camera_x <= game.camera_min_x) {
-		game.camera_x = game.camera_min_x;
+	if (game.camera_x <= CAMERA_MIN_X) {
+		game.camera_x = CAMERA_MIN_X;
 	}
 }
 
@@ -2639,10 +2678,7 @@ int main(__attribute__((unused)) int argc, __attribute__((unused)) char *argv[])
 		exit(1);
 	if (read_levels(game.renderer))
 		exit(1);
-	go[0].x = 100;
-	go[0].y = 100;
-	go[0].type = OBJTYPE_PLAYER;
-	go[0].current_image = 0;
+	reset_game(3);
 
 	Uint32 last_frame_time = SDL_GetTicks();
 
