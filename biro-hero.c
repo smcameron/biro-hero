@@ -2524,8 +2524,11 @@ void render(struct game_state *game)
 	draw_score(game->renderer);
 
 	draw_lives(game->renderer);
-	if (player->hit_points == 0)
+	if (player->hit_points == 0) {
+		player->shooting = 0;
+		player->throwing_grenade = 0;
 		draw_wasted(game->renderer);
+	}
 
 	union vec3 colors[4];
 	sample_mask_around_object(&go[0], colors);
