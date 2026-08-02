@@ -144,7 +144,7 @@ static struct level {
 	struct image collision_mask[MAX_SCREENS_PER_LEVEL];
 	int player_initial_x, player_initial_y;
 } level[MAX_LEVELS] = { 0 };
-static struct level *currlvl = &level[0];
+static struct level *currlvl = &level[1];
 #define CURRENT_LEVEL (currlvl - &level[0])
 
 #define CAMERA_MIN_X (512.0f)
@@ -650,13 +650,18 @@ static int read_level(SDL_Renderer *renderer, int levelnum /* zero based */)
 			lvl->ncolor_codings++;
 		}
 	}
+	printf("level: %ld: nscreens = %d, ncolor_codings = %d\n",
+			lvl - &level[0], lvl->nscreens, lvl->ncolor_codings);
 	free(namelist);
 	return x;
 }
 
 static int read_levels(SDL_Renderer *renderer)
 {
-	return read_level(renderer, 0);
+	int x;
+	x = read_level(renderer, 0);
+	x += read_level(renderer, 1);
+	return x;
 }
 
 static void player_init(void)
@@ -1478,6 +1483,7 @@ static void sample_collision_mask(float wx, float wy, union vec3 *color)
 
 	if (img < 0 || img >= currlvl->ncolor_codings) {
 		fprintf(stderr, "sample_color_coded_map(): Bad image number %d\n", img);
+		fprintf(stderr, "color codings = %d\n", currlvl->ncolor_codings);
 		return;
 	}
 
