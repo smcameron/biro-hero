@@ -2022,8 +2022,6 @@ static void player_shoot(struct game_object *o)
 
 static void player_throw_grenade(struct game_object *o)
 {
-	if (player->is_climbing) /* can't shoot from ladder */
-		return;
 	uint32_t now = SDL_GetTicks();
 	if (now - player->last_grenade_time < 1500) /* throttle grenades to 2 per 3 secs */
 		return;
@@ -2246,6 +2244,7 @@ void update(float delta_time)
 out:
 	if (player->throwing_grenade) {
 		float angle;
+		float speed;
 		int i = snis_object_pool_alloc_obj(game.objpool);
 		if (i < 0)
 			goto done;
@@ -2254,11 +2253,17 @@ out:
 			angle = 45.0f * M_PI / 180.0f;
 		else
 			angle = (180.0f - 45.0f) * M_PI / 180.0f;
+		speed = GRENADE_LAUNCH_SPEED;
+		/* if they are on a ladder, assume they want to throw down */
+		if (player->is_climbing) {
+			speed = GRENADE_LAUNCH_SPEED / 3.0f;
+			angle = 315.0f * M_PI / 180.0f;
+		}
 		grenade->type = OBJTYPE_GRENADE;
 		grenade->x = player->x;
 		grenade->y = player->y;
-		grenade->vx = GRENADE_LAUNCH_SPEED * cos(angle);
-		grenade->vy = GRENADE_LAUNCH_SPEED * -sin(angle);
+		grenade->vx = speed * cos(angle);
+		grenade->vy = speed * -sin(angle);
 		grenade->next_animation_tick = SDL_GetTicks() + GRENADE_FUSE_TIME_SECS * 1000.0f;
 		grenade->is_climbing = 0;
 		grenade->is_grounded = 0;
