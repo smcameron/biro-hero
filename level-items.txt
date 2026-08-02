@@ -1,4 +1,5 @@
 level: 1
+player-location: 291, 257
 	450.0 700.0 radar_console
 	550.0 700.0 medicine_box
 	150.0 590.0 wallmap
@@ -45,3 +46,6 @@ level: 1
 	1680.0 400.0 medicine_box
 	2620.0 686.0 medicine_box
 	3872.0 395.0 medicine_box
+level: 2
+player-location: 291, 257
+

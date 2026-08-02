@@ -142,6 +142,7 @@ static struct level {
 	int ncolor_codings;
 	struct image terrain[MAX_SCREENS_PER_LEVEL];
 	struct image collision_mask[MAX_SCREENS_PER_LEVEL];
+	int player_initial_x, player_initial_y;
 } level[MAX_LEVELS] = { 0 };
 static struct level *currlvl = &level[0];
 #define CURRENT_LEVEL (currlvl - &level[0])
@@ -668,8 +669,8 @@ static void player_init(void)
 	player = &go[i];
 	memset(player, 0, sizeof(*player));
 	player->i = i;
-	player->x = 80;
-	player->y = 360;
+	player->x = currlvl->player_initial_x;
+	player->y = currlvl->player_initial_y;
 	player->type = OBJTYPE_PLAYER;
 	player->ticks = 0.0;
 	player->next_animation_tick = 0.0;
@@ -742,6 +743,19 @@ static int read_level_items(char *filename)
 				return -1;
 			}
 			current_level = iv - 1;
+			continue;
+		}
+
+		int ipx, ipy;
+		rc = sscanf(buffer, " player-location: %d, %d", &ipx, &ipy);
+		if (rc == 2) {
+			if (current_level == -1) {
+				fprintf(stderr, "%s:%d: player-location but level not specified\n",
+					filename, line);
+				return -1;
+			}
+			level[current_level].player_initial_x = ipx;
+			level[current_level].player_initial_y = ipy;
 			continue;
 		}
 
